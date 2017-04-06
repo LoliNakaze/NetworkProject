@@ -36,7 +36,8 @@ public class HTTPReader {
 
         while (llastRead != '\r' || lastRead != '\n') {
             if (!buff.hasRemaining()) {
-                s.append(ASCII_CHARSET.decode(buff.flip()));
+            	buff.flip();
+                s.append(ASCII_CHARSET.decode(buff));
 
                 buff.clear();
                 if (-1 == sc.read(buff))
@@ -48,10 +49,12 @@ public class HTTPReader {
         }
 
         int limit = buff.limit();
-        s.append(ASCII_CHARSET.decode(buff.flip()));
+        buff.flip();
+        s.append(ASCII_CHARSET.decode(buff));
         s.delete(s.length() - 2, s.length());
 
-        buff.limit(limit).compact();
+        buff.limit(limit);
+        buff.compact();
 
         return s.toString();
     }
