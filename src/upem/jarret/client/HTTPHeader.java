@@ -1,9 +1,9 @@
-package upem.jarret.client.client;
+package upem.jarret.client;
 
 import java.nio.charset.Charset;
 import java.util.*;
 
-import static upem.jarret.client.client.HTTPException.ensure;
+import static upem.jarret.client.HTTPException.ensure;
 
 public class HTTPHeader {
     /**
