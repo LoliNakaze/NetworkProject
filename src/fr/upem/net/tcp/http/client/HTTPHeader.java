@@ -5,14 +5,7 @@ import java.util.*;
 
 import static fr.upem.net.tcp.http.client.HTTPException.ensure;
 
-
-/**
- * @author carayol
- *         Class representing a HTTP header
- */
-
 public class HTTPHeader {
-
     /**
      * Supported versions of the HTTP Protocol
      */
@@ -27,14 +20,14 @@ public class HTTPHeader {
     private final Map<String, String> fields;
 
 
-    private HTTPHeader(String response,String version,int code,Map<String, String> fields) throws HTTPException {
+    private HTTPHeader(String response, String version, int code, Map<String, String> fields) throws HTTPException {
         this.response = response;
         this.version = version;
         this.code = code;
         this.fields = Collections.unmodifiableMap(fields);
     }
-    
-    public static HTTPHeader create(String response, Map<String,String> fields) throws HTTPException {
+
+    public static HTTPHeader create(String response, Map<String, String> fields) throws HTTPException {
         String[] tokens = response.split(" ");
         // Treatment of the response line
         ensure(tokens.length >= 2, "Badly formed response:\n" + response);
@@ -47,10 +40,10 @@ public class HTTPHeader {
         } catch (NumberFormatException e) {
             ensure(false, "Invalid response:\n" + response);
         }
-        Map<String,String> fieldsCopied = new HashMap<>();
+        Map<String, String> fieldsCopied = new HashMap<>();
         for (String s : fields.keySet())
-            fieldsCopied.put(s,fields.get(s).trim());
-        return new HTTPHeader(response,version,code,fieldsCopied);
+            fieldsCopied.put(s, fields.get(s).trim());
+        return new HTTPHeader(response, version, code, fieldsCopied);
     }
 
     public String getResponse() {
@@ -71,7 +64,7 @@ public class HTTPHeader {
 
     /**
      * @return the value of the Content-Length field in the header
-     *         -1 if the field does not exists
+     * -1 if the field does not exists
      * @throws HTTPError when the value of Content-Length is not a number
      */
     public int getContentLength() throws HTTPException {
@@ -88,7 +81,7 @@ public class HTTPHeader {
 
     /**
      * @return the Content-Type
-     *         null if there is no Content-Type field
+     * null if there is no Content-Type field
      */
     public String getContentType() {
         String s = fields.get("Content-Type");
@@ -100,7 +93,7 @@ public class HTTPHeader {
 
     /**
      * @return the charset corresponding to the Content-Type field
-     *         null if charset is unknown or unavailable on the JVM
+     * null if charset is unknown or unavailable on the JVM
      */
     public Charset getCharset() {
         Charset cs = null;
@@ -109,9 +102,9 @@ public class HTTPHeader {
         for (String t : s.split(";")) {
             if (t.contains("charset=")) {
                 try {
-                    cs= Charset.forName(t.split("=")[1].trim());
+                    cs = Charset.forName(t.split("=")[1].trim());
                 } catch (Exception e) {
-                   // If the Charset is unknown or unavailable we turn null
+                    // If the Charset is unknown or unavailable we turn null
                 }
                 return cs;
             }

@@ -35,7 +35,7 @@ public class HTTPReader {
         StringBuilder s = new StringBuilder("");
 
         while (llastRead != '\r' || lastRead != '\n') {
-            if(!buff.hasRemaining()) {
+            if (!buff.hasRemaining()) {
                 s.append(ASCII_CHARSET.decode(buff.flip()));
 
                 buff.clear();
@@ -66,7 +66,7 @@ public class HTTPReader {
         Map<String, String> fields = new HashMap<>();
         String line;
 
-        while(!(line = readLineCRLF()).isEmpty()) {
+        while (!(line = readLineCRLF()).isEmpty()) {
             String[] strings = line.split(":");
             fields.merge(strings[0], Arrays.stream(strings).skip(1).collect(Collectors.joining(":")), (x, y) -> x + ";" + y);
         }

@@ -13,15 +13,15 @@ public class HTTPClient {
     private final InetSocketAddress server;
     private final String resource;
 
-    HTTPClient (String address, String resource) {
+    HTTPClient(String address, String resource) {
         this.server = new InetSocketAddress(address, 80);
         this.resource = resource;
     }
 
-    String get () throws IOException {
+    String get() throws IOException {
         int bufferSize = 1024;
         Charset ascii = Charset.forName("ASCII");
-        try(SocketChannel channel = SocketChannel.open()) {
+        try (SocketChannel channel = SocketChannel.open()) {
             channel.connect(server);
             channel.write(ascii.encode(resource));
 
