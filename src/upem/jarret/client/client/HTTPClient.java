@@ -1,4 +1,4 @@
-package fr.upem.net.tcp.http.client;
+package upem.jarret.client.client;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;

@@ -1,9 +1,9 @@
-package fr.upem.net.tcp.http.client;
+package upem.jarret.client.client;
 
 import java.nio.charset.Charset;
 import java.util.*;
 
-import static fr.upem.net.tcp.http.client.HTTPException.ensure;
+import static upem.jarret.client.client.HTTPException.ensure;
 
 public class HTTPHeader {
     /**
@@ -65,7 +65,7 @@ public class HTTPHeader {
     /**
      * @return the value of the Content-Length field in the header
      * -1 if the field does not exists
-     * @throws HTTPError when the value of Content-Length is not a number
+     * @throws HTTPException when the value of Content-Length is not a number
      */
     public int getContentLength() throws HTTPException {
         String s = fields.get("Content-Length");

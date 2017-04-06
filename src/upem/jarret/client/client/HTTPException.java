@@ -1,4 +1,4 @@
-package fr.upem.net.tcp.http.client;
+package upem.jarret.client.client;
 
 import java.io.IOException;
 
@@ -17,6 +17,5 @@ public class HTTPException extends IOException {
     public static void ensure(boolean b, String string) throws HTTPException {
         if (!b)
             throw new HTTPException(string);
-
     }
 }
