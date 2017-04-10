@@ -115,7 +115,8 @@ public class HTTPReader {
         return null;
     }
 
-
+    // EXAMPLE
+/*
     public static void main(String[] args) throws IOException {
         Charset charsetASCII = Charset.forName("ASCII");
         String request = "GET / HTTP/1.1\r\n"
@@ -166,4 +167,5 @@ public class HTTPReader {
         System.out.println(header.getCharset().decode(content));
         sc.close();
     }
+    */
 }

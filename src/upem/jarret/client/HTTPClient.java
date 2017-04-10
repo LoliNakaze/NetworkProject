@@ -10,30 +10,41 @@ import java.nio.charset.Charset;
  * Created by nakaze on 23/03/17.
  */
 public class HTTPClient {
+    private static final Charset ASCII = Charset.forName("ASCII");
     private final InetSocketAddress server;
     private final String resource;
+    private SocketChannel channel = SocketChannel.open();
+    private boolean closed = false;
 
-    HTTPClient(String address, String resource) {
+    HTTPClient(String address, int port, String resource) throws IOException {
         this.server = new InetSocketAddress(address, 80);
         this.resource = resource;
     }
 
     String get() throws IOException {
         int bufferSize = 1024;
-        Charset ascii = Charset.forName("ASCII");
-        try (SocketChannel channel = SocketChannel.open()) {
-            channel.connect(server);
-            channel.write(ascii.encode(resource));
+        channel.connect(server);
+        channel.write(ASCII.encode(resource));
 
-            HTTPReader reader = new HTTPReader(channel, ByteBuffer.allocate(bufferSize));
-            HTTPHeader header = reader.readHeader();
+        HTTPReader reader = new HTTPReader(channel, ByteBuffer.allocate(bufferSize));
+        HTTPHeader header = reader.readHeader();
 
-            String cl = header.getFields().get("Content-Length");
-            if (cl == null)
-                // TODO Chunked
-                return null;
+        String cl = header.getFields().get("Content-Length");
+        if (cl == null)
+            // TODO Chunked
+            return null;
+        return ASCII.decode(reader.readBytes(Integer.parseInt(cl))).toString();
+    }
 
-            return ascii.decode(reader.readBytes(Integer.parseInt(cl))).toString();
-        }
+    void close() throws IOException {
+        channel.close();
+        closed = true;
+    }
+
+    boolean write(String response) throws IOException {
+        if (closed)
+            return false;
+        channel.write(ASCII.encode(response));
+        return true;
     }
 }
