@@ -37,7 +37,6 @@ public class JobMonitor {
          * @throws IOException
          */
         static List<Job> joblistFromFile(Path path) throws IOException {
-            // TODO : I don't think it handles multiple jobs in the file
             ArrayList<Job> jobs = new ArrayList<>();
 
             try (Stream<String> lines = Files.lines(path)) {

@@ -33,6 +33,7 @@ public class JarRetServer {
         private static final Charset CHARSET_ASCII = Charset.forName("ASCII");
 
         private State state;
+        private StringBuilder stringBuilder = new StringBuilder();
 
         enum State {
             CONNECTION, TASK, RESPONSE, END
@@ -63,18 +64,24 @@ public class JarRetServer {
 
         public void doWrite() throws IOException {
             buffer.flip();
-            sc.write(buffer);
-            buffer.compact();
+            if (sc.write(buffer) == 0) {
+                buffer.compact();
+                return;
+            }
 
-            switch (state) {
-                case TASK:
-                    // TODO : Send the task
-                    break;
-                case END:
-                    // TODO : Send whether the response was fine.
-                    break;
-                default:
-                    throw new IllegalStateException("Impossible state in write mode: " + state.toString());
+            if (buffer.position() == 0) {
+                switch (state) {
+                    case TASK:
+                        // TODO : Response wait
+                        state = State.RESPONSE;
+                        break;
+                    case END:
+                        // TODO : End ?
+                        sc.close();
+                        break;
+                    default:
+                        throw new IllegalStateException("Impossible state in write mode: " + state.toString());
+                }
             }
         }
 
@@ -94,6 +101,8 @@ public class JarRetServer {
                         buffer.put(CHARSET_ASCII.encode(badRequest()));
                         state = State.END;
                     } else {
+                        // TODO : Comeback
+
                         Charset contentCharset = (header.getCharset() != null) ? header.getCharset() : CHARSET_ASCII;
                         String task = jobMonitor.sendTask();
                         buffer.put(CHARSET_ASCII.encode(ok()));
@@ -114,13 +123,14 @@ public class JarRetServer {
                         buffer.clear();
 
                         if (error == null) {
-                            buffer.put(header.getCharset().encode(badRequest()));
+                            buffer.put(CHARSET_ASCII.encode(badRequest()));
                         } else {
                             // TODO : A demander : est-ce qu'une erreur dans une task fait que la task est exécutée ?
-                            buffer.put(header.getCharset().encode(ok()));
+                            buffer.put(CHARSET_ASCII.encode(ok()));
                         }
                     } else {
                         jobMonitor.updateATask(Integer.parseInt((String) map.get("Task")), (String) answer);
+                        buffer.put(CHARSET_ASCII.encode(ok()));
                     }
 
                     state = State.END;
