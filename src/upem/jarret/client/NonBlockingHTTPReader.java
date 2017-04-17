@@ -1,4 +1,4 @@
-package upem.jarret.http;
+package upem.jarret.client;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
