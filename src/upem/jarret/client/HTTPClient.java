@@ -57,6 +57,9 @@ public class HTTPClient {
 		Worker instance = null;
 		try {
 			instance = WorkerFactory.getWorker((String) map.get("WorkerURL"), (String) map.get("WorkerClassName"));
+			System.out.println( "voici mon instancce " + instance.getClass().getName() );
+			System.out.println( instance.getClass().getName().equals(map.get("WorkerClassName")));
+
 		} catch (Exception e) {
 			System.err.println("Instance a foiré");
 		}

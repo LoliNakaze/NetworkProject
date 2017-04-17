@@ -100,7 +100,6 @@ public class HTTPReader {
 	 *             could be read
 	 */
 	public ByteBuffer readBytes(int contentLenght) throws IOException {
-		System.out.println("On rentre dans readbytes");
 		ByteBuffer bufferFullContent = ByteBuffer.allocate(contentLenght);
 		int nbBytesRead = 0;
 		do {
@@ -124,13 +123,11 @@ public class HTTPReader {
 			nbBytesRead += buff.remaining();
 			bufferFullContent.put(buff);
 			buff.clear();
-			System.out.println("avant le read");
 			if(nbBytesRead >= contentLenght){
 				
 				break;
 			}
 			sc.read(buff);
-			System.out.println("apres le read");
 		} while (nbBytesRead < contentLenght);
 
 		return bufferFullContent;
