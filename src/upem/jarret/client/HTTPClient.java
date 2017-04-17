@@ -29,7 +29,7 @@ public class HTTPClient {
 		int port = 8080;
 		SocketChannel sc = SocketChannel.open(new InetSocketAddress(host, port));
 
-		String request = "GET Task HTTP/1.1\r\nHOST: " + host + "\r\n" + "\r\n";
+		String request = "GET Task HTTP/1.1\r\nHOST:  " + host + "\r\n" + "\r\n";
 
 		System.out.println("Voici mon Client qui parle à: " + sc.getRemoteAddress() + "\nRequest ->\n" + request);
 
