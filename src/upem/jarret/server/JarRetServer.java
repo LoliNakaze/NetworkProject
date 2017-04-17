@@ -43,8 +43,10 @@ public class JarRetServer {
             switch (state) {
                 case CONNECTION:
                     // TODO : Read the header and check format
+                    break;
                 case RESPONSE:
                     // TODO : Read the header and the response.
+                    break;
                 default:
                     throw new IllegalStateException("Impossible state in read mode: " + state.toString());
             }
@@ -58,8 +60,10 @@ public class JarRetServer {
             switch (state) {
                 case TASK:
                     // TODO : Send the task
+                    break;
                 case END:
                     // TODO : Send whether the response was fine.
+                    break;
                 default:
                     throw new IllegalStateException("Impossible state in write mode: " + state.toString());
             }
@@ -70,7 +74,7 @@ public class JarRetServer {
     private final ServerSocketChannel serverSocketChannel;
     private final Selector selector;
     private final Set<SelectionKey> selectedKeys;
-    private final List<Job> jobList;
+    private final List<JobMonitor> jobList;
 
     private final Thread listener = new Thread(() -> startCommandListener(System.in));
 
@@ -84,7 +88,7 @@ public class JarRetServer {
         selector = Selector.open();
         selectedKeys = selector.selectedKeys();
 
-        jobList = Job.joblistFromFile(path);
+        jobList = JobMonitor.jobMonitorListFromFile(path);
 
         commandMap.put(Command.STOP, () -> silentlyClose(serverSocketChannel));
         commandMap.put(Command.FLUSH, () -> selector.keys().stream().filter(s -> !(s.channel() instanceof ServerSocketChannel)).forEach(k -> silentlyClose(k.channel())));
