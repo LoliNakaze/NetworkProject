@@ -131,5 +131,4 @@ public class HTTPHeader {
                 + version + " " + code + "\n"
                 + fields.toString();
     }
-
 }

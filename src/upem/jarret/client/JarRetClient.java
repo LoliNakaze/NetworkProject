@@ -57,7 +57,7 @@ public class JarRetClient {
 
 			sc.write(ASCII.encode(GETRequest));
 
-			HTTPReader reader = new HTTPReader(sc, ByteBuffer.allocate(50));
+			HTTPReader reader = HTTPReader.useBlockingReader(sc, ByteBuffer.allocate(50));
 			HTTPHeader getHeader = reader.readHeader();
 
 			ByteBuffer contentJson = reader.readBytes(getHeader.getContentLength());
@@ -144,11 +144,11 @@ public class JarRetClient {
 	}
 
 	private static int checkWait(ServerAnswer sa) {
-		Integer nbseconds = 0;
-		if ( null == (nbseconds = Integer.valueOf( (String)  sa.map.get("ComeBackInSeconds") )) ) {
-			return 0;
+		Object nbseconds = sa.map.get("ComeBackInSeconds");
+		if (nbseconds != null){
+			return Integer.valueOf( (String) nbseconds);
 		}
-		return nbseconds;
+		return 0;
 	}
 
 	private static boolean isInvalidJson(String json) throws IOException {

@@ -27,7 +27,7 @@ public class HTTPClientGuy {
             channel.connect(server);
             channel.write(ascii.encode(resource));
 
-            HTTPReader reader = new HTTPReader(channel, ByteBuffer.allocate(bufferSize));
+            HTTPReader reader = HTTPReader.useBlockingReader(channel, ByteBuffer.allocate(bufferSize));
             HTTPHeader header = reader.readHeader();
 
             String cl = header.getFields().get("Content-Length");
