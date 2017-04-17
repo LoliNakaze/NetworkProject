@@ -35,7 +35,7 @@ public class HTTPClient {
 
         sc.write(ASCII.encode(request));
 
-        HTTPReader reader = new HTTPReader(sc, ByteBuffer.allocate(50));
+        HTTPReader reader = HTTPReader.useBlockingReader(sc, ByteBuffer.allocate(50));
         HTTPHeader header = reader.readHeader();
 
         int contentLength = header.getContentLength();
