@@ -5,6 +5,8 @@ import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 
 /**
@@ -61,7 +63,6 @@ public class JarRetServer {
                 default:
                     throw new IllegalStateException("Impossible state in write mode: " + state.toString());
             }
-            // TODO : Send the task, if the task is sent → key.interestOps(OP_READ);
         }
     }
 
@@ -69,17 +70,21 @@ public class JarRetServer {
     private final ServerSocketChannel serverSocketChannel;
     private final Selector selector;
     private final Set<SelectionKey> selectedKeys;
+    private final List<Job> jobList;
+
     private final Thread listener = new Thread(() -> startCommandListener(System.in));
 
     private Command command = Command.NONE;
     private Map<Command, Runnable> commandMap = new EnumMap<>(Command.class);
     private final Object lock = new Object();
 
-    public JarRetServer(int port) throws IOException {
+    public JarRetServer(int port, Path path) throws IOException {
         serverSocketChannel = ServerSocketChannel.open();
         serverSocketChannel.bind(new InetSocketAddress(port));
         selector = Selector.open();
         selectedKeys = selector.selectedKeys();
+
+        jobList = Job.joblistFromFile(path);
 
         commandMap.put(Command.STOP, () -> silentlyClose(serverSocketChannel));
         commandMap.put(Command.FLUSH, () -> selector.keys().stream().filter(s -> !(s.channel() instanceof ServerSocketChannel)).forEach(k -> silentlyClose(k.channel())));
@@ -171,7 +176,7 @@ public class JarRetServer {
     }
 
     private static void usage() {
-        System.out.println("ServerSumNew <listeningPort>");
+        System.out.println("ServerSumNew <listeningPort> <joblistPath>");
     }
 
     public static void main(String[] args) throws NumberFormatException, IOException {
@@ -179,7 +184,7 @@ public class JarRetServer {
             usage();
             return;
         }
-        JarRetServer server = new JarRetServer(Integer.parseInt(args[0]));
+        JarRetServer server = new JarRetServer(Integer.parseInt(args[0]), Paths.get(args[1]));
 
         server.launch();
     }

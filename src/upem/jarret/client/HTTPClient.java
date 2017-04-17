@@ -164,6 +164,4 @@ public class HTTPClient {
 //        channel.write(ASCII.encode(response));
 //        return true;
 //    }
-
->>>>>>>2d4b0d10c29699080185648608c13f59ed0b9afc
 }

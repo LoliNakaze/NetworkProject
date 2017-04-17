@@ -1,0 +1,39 @@
+{
+ "jobId" :  "23571113"  ,
+ "jobTaskNumber" : "10000000",
+ "jobDescription" : "Test the primality of the first 10000000 numbers",
+ "jobPriority" : "0",
+ "workerVersionNumber" : "1"  ,
+ "workerURL" :  "http://igm.univ-mlv.fr/~carayol/WorkerPrimeV1.jar",
+ "workerClassName" : "upem.workerprime.WorkerPrime"
+}
+
+{
+ "jobId" :  "5001"  ,
+ "jobTaskNumber" : "737",
+ "jobDescription" : "Test permutations of size 5",
+ "jobPriority" : "1",
+ "workerVersionNumber" : "1.1"  ,
+ "workerURL" :  "http://igm.univ-mlv.fr/~carayol/WorkerNicaudFiveV11.jar",
+ "workerClassName" : "upem.workernicaud.ComputationFiveV11"
+}
+
+{
+ "jobId" :  "6001"  ,
+ "jobTaskNumber" : "26851",
+ "jobDescription" : "Test permutations of size 6",
+ "jobPriority" : "1",
+ "workerVersionNumber" : "1"  ,
+ "workerURL" :  "http://igm.univ-mlv.fr/~carayol/WorkerNicaudSixV1.jar",
+ "workerClassName" : "upem.workernicaud.ComputationSixV1"
+}
+
+{
+ "jobId" :  "7001"  ,
+ "jobTaskNumber" : "1333524",
+ "jobDescription" : "Test permutations of size 7",
+ "jobPriority" : "1",
+ "workerVersionNumber" : "1"  ,
+ "workerURL" :  "http://igm.univ-mlv.fr/~carayol/WorkerNicaudSevenV1.jar",
+ "workerClassName" : "upem.workernicaud.ComputationSevenV1"
+}

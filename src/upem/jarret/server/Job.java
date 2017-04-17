@@ -3,16 +3,16 @@ package upem.jarret.server;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
-import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
-import java.nio.file.OpenOption;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-/**
- * Created by nakaze on 17/04/17.
- */
 public class Job {
     private String JobId;
     private String JobTaskNumber;
@@ -30,11 +30,20 @@ public class Job {
      * @return The list of jobs given in the file pointed by path.
      * @throws IOException
      */
-    public Job[] jobFromFile(Path path) throws IOException {
+    public static List<Job> joblistFromFile(Path path) throws IOException {
         // TODO : I don't think it handles multiple jobs in the file
-        InputStream inJson = Files.newInputStream(path, StandardOpenOption.READ);
+        ArrayList<Job> jobs = new ArrayList<>();
 
-        return new ObjectMapper().readValue(inJson, Job[].class);
+        try (Stream<String> lines = Files.lines(path)) {
+            return Arrays.stream(lines.collect(Collectors.joining()).split("}"))
+                    .map(s -> {
+                        try {
+                            return new ObjectMapper().readValue(s + "}", Job.class);
+                        } catch (IOException e) {
+                            throw new UncheckedIOException(e);
+                        }
+                    }).collect(Collectors.toList());
+        }
     }
 
     public String getJobPriority() {
@@ -91,5 +100,22 @@ public class Job {
 
     public void setJobId(String jobId) {
         JobId = jobId;
+    }
+
+    @Override
+    public String toString() {
+        return "{\n"
+                + "\tJobId : " + JobId + "\n"
+                + "\tJobTaskNumber : " + JobTaskNumber + "\n"
+                + "\tJobDescription : " + JobDescription + "\n"
+                + "\tJobPriority : " + JobPriority + "\n"
+                + "\tWorkerVersionNumber : " + WorkerVersionNumber + "\n"
+                + "\tWorkerURL : " + WorkerURL + "\n"
+                + "\tWorkerClassName : " + WorkerClassName + "\n}";
+    }
+
+    public static void main(String[] args) throws IOException {
+        List<Job> jobs = Job.joblistFromFile(Paths.get("resources/JarRetJobs.json"));
+        jobs.forEach(Job::toString);
     }
 }
