@@ -143,12 +143,16 @@ public class JobMonitor {
         return Integer.parseInt(job.getJobPriority());
     }
 
+    public boolean isComplete() {
+        return Integer.parseInt(job.getJobTaskNumber()) == bitSet.cardinality();
+    }
+
     private int getNextTask() {
         nextId = bitSet.nextClearBit(++nextId);
         return nextId;
     }
 
-    public static List<JobMonitor> jobMonitorListFromFile (Path path) throws IOException {
+    public static List<JobMonitor> jobMonitorListFromFile(Path path) throws IOException {
         return Job.joblistFromFile(path).stream().map(JobMonitor::new).collect(Collectors.toList());
     }
 

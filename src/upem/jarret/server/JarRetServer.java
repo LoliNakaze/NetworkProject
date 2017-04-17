@@ -1,20 +1,26 @@
 package upem.jarret.server;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import upem.jarret.client.HTTPHeader;
+import upem.jarret.client.HTTPReader;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
+import java.nio.charset.Charset;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.ArrayBlockingQueue;
 
 /**
  * Created by nakaze on 15/04/17.
  */
 public class JarRetServer {
-    enum Command {
-        NONE, HALT, STOP, FLUSH, SHOW
+    private enum Command {
+        SHUTDOWN, STOP, FLUSH, SHOW
     }
 
     static class Context {
@@ -22,6 +28,9 @@ public class JarRetServer {
         private final ByteBuffer buffer = ByteBuffer.allocate(BUF_SIZE);
         private final SelectionKey key;
         private final SocketChannel sc;
+        private JobMonitor jobMonitor = null;
+        private StringBuilder response = new StringBuilder();
+        private static final Charset CHARSET_ASCII = Charset.forName("ASCII");
 
         private State state;
 
@@ -68,17 +77,89 @@ public class JarRetServer {
                     throw new IllegalStateException("Impossible state in write mode: " + state.toString());
             }
         }
+
+        private void analyzeAnswer() throws IOException {
+            //
+            HTTPReader reader = HTTPReader.useStringReader(buffer);
+            HTTPHeader header = reader.readHeader();
+
+            ObjectMapper mapper = new ObjectMapper();
+            HashMap<String, Object> map = mapper.readValue(reader.readBytes(header.getContentLength()).flip().toString(), HashMap.class);
+
+            switch (state) {
+                case CONNECTION:
+                    buffer.clear();
+                    String[] split = header.getResponse().split(" ");
+                    if (!(split[0].equals("GET") && split[1].equals("Task"))) {
+                        buffer.put(CHARSET_ASCII.encode(badRequest()));
+                        state = State.END;
+                    } else {
+                        Charset contentCharset = (header.getCharset() != null) ? header.getCharset() : CHARSET_ASCII;
+                        String task = jobMonitor.sendTask();
+                        buffer.put(CHARSET_ASCII.encode(ok()));
+                        buffer.put(CHARSET_ASCII.encode("Content-type: application/json; charset=utf-8\r\n"
+                                + "Content-length: " + task.length() + "\r\n"
+                                + "\r\n"));
+                        buffer.put(contentCharset.encode(task));
+
+                        state = State.TASK;
+                    }
+                    break;
+                case RESPONSE:
+                    Object answer = map.get("Answer");
+
+                    buffer.clear();
+                    if (answer == null) {
+                        Object error = map.get("Error");
+                        buffer.clear();
+
+                        if (error == null) {
+                            buffer.put(header.getCharset().encode(badRequest()));
+                        } else {
+                            // TODO : A demander : est-ce qu'une erreur dans une task fait que la task est exécutée ?
+                            buffer.put(header.getCharset().encode(ok()));
+                        }
+                    } else {
+                        jobMonitor.updateATask(Integer.parseInt((String) map.get("Task")), (String) answer);
+                    }
+
+                    state = State.END;
+                    break;
+            }
+
+            key.interestOps(SelectionKey.OP_WRITE);
+        }
+
+        private String badRequest() {
+            return "HTTP/1.1 400 Bad Request\r\n";
+        }
+
+        private String ok() {
+            return "HTTP/1.1 200 OK\r\n";
+        }
+
+        private String comeback() {
+            return ok()
+                    + "Content-type: application/json; charset=utf-8\r\n"
+                    + "Content-length: 199\r\n"
+                    + "\r\n"
+                    + "{"
+                    + "\"ComeBackInSeconds\" : 300"
+                    + "}";
+        }
     }
 
-    private static final int BUF_SIZE = 512;
+    private static final int BUF_SIZE = 4096;
     private final ServerSocketChannel serverSocketChannel;
     private final Selector selector;
     private final Set<SelectionKey> selectedKeys;
     private final List<JobMonitor> jobList;
 
+    private final Random rand = new Random();
     private final Thread listener = new Thread(() -> startCommandListener(System.in));
 
-    private Command command = Command.NONE;
+    private final ArrayBlockingQueue<Command> commandQueue = new ArrayBlockingQueue<>(5);
+    private Command command;
     private Map<Command, Runnable> commandMap = new EnumMap<>(Command.class);
     private final Object lock = new Object();
 
@@ -92,7 +173,7 @@ public class JarRetServer {
 
         commandMap.put(Command.STOP, () -> silentlyClose(serverSocketChannel));
         commandMap.put(Command.FLUSH, () -> selector.keys().stream().filter(s -> !(s.channel() instanceof ServerSocketChannel)).forEach(k -> silentlyClose(k.channel())));
-        commandMap.put(Command.HALT, () -> {
+        commandMap.put(Command.SHUTDOWN, () -> {
             listener.interrupt();
             Thread.currentThread().interrupt();
         });
@@ -108,12 +189,8 @@ public class JarRetServer {
         while (!Thread.interrupted()) {
             selector.select();
 
-            synchronized (lock) {
-                if (command.compareTo(Command.NONE) != 0) {
-                    commandMap.get(command).run();
-                    command = Command.NONE;
-                }
-            }
+            command = commandQueue.poll();
+            if (command != null) commandMap.get(command).run();
 
             processSelectedKeys();
             selectedKeys.clear();
@@ -127,7 +204,7 @@ public class JarRetServer {
             String line = scanner.nextLine();
 
             switch (line) {
-                case "HALT":
+                case "SHUTDOWN":
                 case "SHOW":
                 case "STOP":
                 case "FLUSH":

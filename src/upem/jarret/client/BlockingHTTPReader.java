@@ -5,30 +5,18 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.Charset;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 public class BlockingHTTPReader implements HTTPReader {
     private final Charset ASCII_CHARSET = Charset.forName("ASCII");
     private final SocketChannel sc;
     private final ByteBuffer buff;
 
-    public BlockingHTTPReader(SocketChannel sc, ByteBuffer buff) {
+    BlockingHTTPReader(SocketChannel sc, ByteBuffer buff) {
         this.sc = sc;
         this.buff = buff;
     }
 
-    /**
-     * @return The ASCII string terminated by CRLF
-     * <p>
-     * The method assume that buff is in write mode and leave it in
-     * write-mode The method never reads from the socket as long as theç
-     * buffer is not empty
-     * @throws IOException HTTPException if the connection is closed before a line could
-     *                     be read
-     */
+    @Override
     public String readLineCRLF() throws IOException {
         byte last = 0;
         byte llast = 0;
@@ -61,40 +49,7 @@ public class BlockingHTTPReader implements HTTPReader {
         return sb.toString();
     }
 
-    /**
-     * @return The HTTPHeader object corresponding to the header read
-     * @throws IOException HTTPException if the connection is closed before a header
-     *                     could be read if the header is ill-formed
-     */
-    public HTTPHeader readHeader() throws IOException {
-        String response = readLineCRLF();
-        Map<String, String> fields = new HashMap<>();
-        String line;
-
-		/*
-         * On continue tant que l'on ne trouve pas LA FAMEUSE LIGNE VIDE !!!
-		 * APRES LA LIGNE C'EST LE CORPS !
-		 */
-        while (!(line = readLineCRLF()).isEmpty()) {
-            String[] strings = line.split(":");
-
-            fields.merge(
-                    strings[0],
-                    Arrays.stream(strings).skip(1).collect(Collectors.joining(":")),
-                    (x, y) -> x + ";" + y);
-        }
-
-        return HTTPHeader.create(response, fields);
-
-    }
-
-    /**
-     * @param contentLength
-     * @return a ByteBuffer in write-mode containing size bytes read on the
-     * socket
-     * @throws IOException HTTPException is the connection is closed before all bytes
-     *                     could be read
-     */
+    @Override
     public ByteBuffer readBytes(int contentLength) throws IOException {
         ByteBuffer bufferFullContent = ByteBuffer.allocate(contentLength);
         int nbBytesRead = 0;
