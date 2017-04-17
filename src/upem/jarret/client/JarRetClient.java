@@ -34,6 +34,7 @@ public class JarRetClient {
             String jarURL = null;
             String className = null;
             int task = -1;
+            // TODO Get JobID : if the worker and the jobID are equal → do not create another Worker
 
             Worker worker = WorkerFactory.getWorker(jarURL, className);
             String taskResponse = worker.compute(task);

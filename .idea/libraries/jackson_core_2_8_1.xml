@@ -1,7 +1,7 @@
 <component name="libraryTable">
-  <library name="WorkerPrimeV1">
+  <library name="jackson-core-2.8.1">
     <CLASSES>
-      <root url="jar://$PROJECT_DIR$/libs/WorkerPrimeV1.jar!/" />
+      <root url="jar://$PROJECT_DIR$/libs/jackson-core-2.8.1.jar!/" />
     </CLASSES>
     <JAVADOC />
     <SOURCES />

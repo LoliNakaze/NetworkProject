@@ -1,9 +1,7 @@
-package upem.jarret.client;
+package upem.jarret.http;
 
 import java.nio.charset.Charset;
 import java.util.*;
-
-import static upem.jarret.client.HTTPException.ensure;
 
 public class HTTPHeader {
     /**
@@ -30,15 +28,15 @@ public class HTTPHeader {
     public static HTTPHeader create(String response, Map<String, String> fields) throws HTTPException {
         String[] tokens = response.split(" ");
         // Treatment of the response line
-        ensure(tokens.length >= 2, "Badly formed response:\n" + response);
+        HTTPException.ensure(tokens.length >= 2, "Badly formed response:\n" + response);
         String version = tokens[0];
-        ensure(HTTPHeader.SUPPORTED_VERSIONS.contains(version), "Unsupported version in response:\n" + response);
+        HTTPException.ensure(HTTPHeader.SUPPORTED_VERSIONS.contains(version), "Unsupported version in response:\n" + response);
         int code = 0;
         try {
             code = Integer.valueOf(tokens[1]);
-            ensure(code >= 100 && code < 600, "Invalid code in response:\n" + response);
+            HTTPException.ensure(code >= 100 && code < 600, "Invalid code in response:\n" + response);
         } catch (NumberFormatException e) {
-            ensure(false, "Invalid response:\n" + response);
+            HTTPException.ensure(false, "Invalid response:\n" + response);
         }
         Map<String, String> fieldsCopied = new HashMap<>();
         for (String s : fields.keySet())

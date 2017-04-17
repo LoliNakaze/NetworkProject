@@ -1,5 +1,7 @@
 package upem.jarret.client;
 
+import upem.jarret.http.HTTPHeader;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -26,7 +28,7 @@ public class HTTPClient {
         channel.connect(server);
         channel.write(ASCII.encode(resource));
 
-        HTTPReader reader = new HTTPReader(channel, ByteBuffer.allocate(bufferSize));
+        HTTPReader reader = HTTPReader.useBlockingReader(channel, ByteBuffer.allocate(bufferSize));
         HTTPHeader header = reader.readHeader();
 
         String cl = header.getFields().get("Content-Length");
