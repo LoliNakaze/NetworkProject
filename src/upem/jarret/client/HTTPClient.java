@@ -45,15 +45,13 @@ public class HTTPClient {
 
 		StringBuilder contenu = new StringBuilder();
 
-		ByteBuffer content = reader.readBytes(contentLength-1);
+		ByteBuffer content = reader.readBytes(contentLength);
 		content.flip();
 		contenu.append(header.getCharset().decode(content));
-		contenu.append("}");
 		System.out.println("\n\n" + contenu);
 		
 
 		ObjectMapper mapper = new ObjectMapper();
-
 		HashMap<String, Object> map = mapper.readValue(contenu.toString(), HashMap.class);
 
 		Worker instance = null;
@@ -90,7 +88,7 @@ public class HTTPClient {
 		sb.append("{\"JobId\": \"").append(jobId).append("\", \"WorkerVersion\": \"").append(workerVersion)
 				.append("\", \"WorkerURL\": \"").append(workerUrl).append("\", \"WorkerClassName\": \"")
 				.append(workerClassName).append("\", \"Task\": \"").append(task).append("\", \"ClientId\": \"")
-				.append(clientId).append("\", \"Answer\": \"").append(retourAuJson).append("}");
+				.append(clientId).append("\", \"Answer\": ").append(retourAuJson).append("}");
 
 		System.out.println("Voici le JSON POUR LE POST -> \n " + sb.toString());
 		String corpsJson = sb.toString();
