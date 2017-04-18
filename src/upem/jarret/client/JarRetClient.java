@@ -190,7 +190,7 @@ public class JarRetClient {
 		return workers.computeIfAbsent(jobId, __ -> new HashMap<String, Worker>()).computeIfAbsent(workerVersion,
 				__ -> {
 					try {
-						System.out.println("PAS TROUVER ON CREER UN NOUVEAU");
+						System.out.println("On connait pas ce worker. On demande une nouvelle creation.");
 						return WorkerFactory.getWorker(serverAnswer.getWorkerURL(), serverAnswer.getWorkerClassName());
 					} catch (Exception e) {
 						throw new IllegalArgumentException();
@@ -243,10 +243,10 @@ public class JarRetClient {
 				Thread.sleep(waitSeconds * 1000);
 				continue;
 			}
-
+			System.out.println("on demande une instance");
 			Worker worker = jarRetClient.returnAWorker(serverAnswer.getJobId(), serverAnswer.getWorkerVersion(),
 					serverAnswer);
-
+			System.out.println("L'instance est crée.");
 			String contentWithoutLastLine = createContentWithoutLastLine(serverAnswer);
 			String lastLine = computeLastLine(worker, serverAnswer.getTaskNumber());
 			String contentToSend = new StringBuilder(contentWithoutLastLine).append(lastLine).toString();
