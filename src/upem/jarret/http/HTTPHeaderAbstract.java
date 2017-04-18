@@ -1,65 +1,30 @@
-package upem.jarret.client;
+package upem.jarret.http;
 
 import java.nio.charset.Charset;
 import java.util.*;
 
-import static upem.jarret.client.HTTPException.ensure;
-
 /**
  * Created by nakaze on 18/04/17.
  */
-public class HTTPHeaderFromServer implements HTTPHeader {
+class HTTPHeaderAbstract {
+    String response;
+    String version;
+    Map<String, String> fields;
+
     /**
      * Supported versions of the HTTP Protocol
      */
+    static String[] LIST_SUPPORTED_VERSIONS = new String[]{"HTTP/1.0", "HTTP/1.1", "HTTP/1.2"};
+    static Set<String> SUPPORTED_VERSIONS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(LIST_SUPPORTED_VERSIONS)));
 
-    private final String response;
-    private final String version;
-    private final int code;
-    private final Map<String, String> fields;
-
-
-    private HTTPHeaderFromServer(String response, String version, int code, Map<String, String> fields) throws HTTPException {
-        this.response = response;
-        this.version = version;
-        this.code = code;
-        this.fields = Collections.unmodifiableMap(fields);
-    }
-
-    static HTTPHeaderFromServer create(String response, Map<String, String> fields) throws HTTPException {
-        String[] tokens = response.split(" ");
-        // Treatment of the response line
-        ensure(tokens.length >= 2, "Badly formed response:\n" + response);
-        String version = tokens[0];
-        ensure(HTTPHeaderFromClient.SUPPORTED_VERSIONS.contains(version), "Unsupported version in response:\n" + response);
-        int code = 0;
-        try {
-            code = Integer.valueOf(tokens[1]);
-            ensure(code >= 100 && code < 600, "Invalid code in response:\n" + response);
-        } catch (NumberFormatException e) {
-            ensure(false, "Invalid response:\n" + response);
-        }
-        Map<String, String> fieldsCopied = new HashMap<>();
-        for (String s : fields.keySet())
-            fieldsCopied.put(s, fields.get(s).trim());
-        return new HTTPHeaderFromServer(response, version, code, fieldsCopied);
-    }
-
-    @Override
     public String getResponse() {
         return response;
     }
 
-    @Override
     public String getVersion() {
         return version;
     }
 
-    public int getCode() {
-        return code;
-    }
-
-    @Override
     public Map<String, String> getFields() {
         return fields;
     }
@@ -69,7 +34,6 @@ public class HTTPHeaderFromServer implements HTTPHeader {
      * -1 if the field does not exists
      * @throws HTTPException when the value of Content-Length is not a number
      */
-    @Override
     public int getContentLength() throws HTTPException {
         String s = fields.get("Content-Length");
         if (s == null) return -1;
@@ -86,7 +50,6 @@ public class HTTPHeaderFromServer implements HTTPHeader {
      * @return the Content-Type
      * null if there is no Content-Type field
      */
-    @Override
     public String getContentType() {
         String s = fields.get("Content-Type");
         if (s != null) {
@@ -99,7 +62,6 @@ public class HTTPHeaderFromServer implements HTTPHeader {
      * @return the charset corresponding to the Content-Type field
      * null if charset is unknown or unavailable on the JVM
      */
-    @Override
     public Charset getCharset() {
         Charset cs = null;
         String s = fields.get("Content-Type");
@@ -120,15 +82,13 @@ public class HTTPHeaderFromServer implements HTTPHeader {
     /**
      * @return true if the header correspond to a chunked response
      */
-    @Override
     public boolean isChunkedTransfer() {
         return fields.containsKey("Transfer-Encoding") && fields.get("Transfer-Encoding").trim().equals("chunked");
     }
 
-    @Override
     public String toString() {
         return response + "\n"
-                + version + " " + code + "\n"
+                + version + " " + "\n"
                 + fields.toString();
     }
 }

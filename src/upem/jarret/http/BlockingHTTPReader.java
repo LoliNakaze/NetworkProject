@@ -1,4 +1,4 @@
-package upem.jarret.client;
+package upem.jarret.http;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -10,7 +10,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class BlockingHTTPReader implements HTTPReader {
+class BlockingHTTPReader implements HTTPReader {
     private final Charset ASCII_CHARSET = Charset.forName("ASCII");
     private final SocketChannel sc;
     private final ByteBuffer buff;
@@ -25,14 +25,11 @@ public class BlockingHTTPReader implements HTTPReader {
         Map<String, String> fields = new HashMap<>();
         String line;
 
-    //    System.out.println(response);
-
 		/*
          * On continue tant que l'on ne trouve pas LA FAMEUSE LIGNE VIDE !!!
 		 * APRES LA LIGNE C'EST LE CORPS !
 		 */
         while (!(line = readLineCRLF()).isEmpty()) {
-  //          System.out.println(line);
             String[] strings = line.split(":");
             fields.merge(
                     strings[0],
@@ -56,7 +53,6 @@ public class BlockingHTTPReader implements HTTPReader {
                 buff.flip();
                 sb.append(ASCII_CHARSET.decode(buff));
                 buff.clear();
-//                sc.read(buff);
                 if (-1 == sc.read(buff)) {
                     throw new HTTPException();
                 }
@@ -167,7 +163,7 @@ public class BlockingHTTPReader implements HTTPReader {
 
 		/*------------------------------------------------------*/
         /*
-		 * bb = ByteBuffer.allocate(50); request = "GET / HTTP/1.1\r\n" +
+         * bb = ByteBuffer.allocate(50); request = "GET / HTTP/1.1\r\n" +
 		 * "Host: www.u-pem.fr\r\n" + "\r\n"; sc = SocketChannel.open();
 		 * sc.connect(new InetSocketAddress("www.u-pem.fr", 80)); reader = new
 		 * HTTPReader(sc, bb); sc.write(charsetASCII.encode(request)); header =

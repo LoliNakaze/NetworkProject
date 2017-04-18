@@ -1,5 +1,7 @@
 package upem.jarret.client;
 
+import upem.jarret.http.HTTPHeader;
+import upem.jarret.http.HTTPReader;
 import upem.jarret.worker.Worker;
 import upem.jarret.worker.WorkerFactory;
 import java.io.IOException;

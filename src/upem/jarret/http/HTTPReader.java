@@ -1,12 +1,8 @@
-package upem.jarret.client;
+package upem.jarret.http;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Created by nakaze on 15/04/17.

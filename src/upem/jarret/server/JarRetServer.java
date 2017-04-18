@@ -1,10 +1,8 @@
 package upem.jarret.server;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import upem.jarret.client.HTTPHeader;
-import upem.jarret.client.HTTPHeaderFromClient;
-import upem.jarret.client.HTTPHeaderFromServer;
-import upem.jarret.client.HTTPReader;
+import upem.jarret.http.HTTPHeader;
+import upem.jarret.http.HTTPReader;
 
 import java.io.IOException;
 import java.io.InputStream;
