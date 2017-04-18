@@ -218,7 +218,7 @@ public class JarRetClient {
 		int i = 0;
 
 		/*-------BOUCLE PRINCIPALE--------*/
-		while (i < 5) {
+		while (true) {
 
 			String GETRequest = createGetRequest(sc.getRemoteAddress());
 			sc.write(ASCII.encode(GETRequest));
@@ -257,7 +257,7 @@ public class JarRetClient {
 			i++; 
 		}
 
-		sc.close();
+//		sc.close();
 
 	}
 

@@ -172,7 +172,7 @@ public class JobMonitor {
         try (OutputStream out = Files.newOutputStream(path, StandardOpenOption.APPEND, StandardOpenOption.CREATE);
              BufferedWriter reader =
                      new BufferedWriter(new OutputStreamWriter(out))) {
-            out.write((task + ":" + response).getBytes());
+            out.write((task + ":" + response + "\n").getBytes());
         }
     }
 }

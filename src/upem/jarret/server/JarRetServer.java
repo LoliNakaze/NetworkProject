@@ -62,14 +62,17 @@ public class JarRetServer {
             if (read == 0)
                 return;
 
-            System.out.println(read);
-
             analyzeAnswer();
         }
 
         public void doWrite() throws IOException {
+   //         System.out.println(buffer);
             buffer.flip();
+     //       System.out.println(buffer);
+
+            System.out.println(buffer);
             if (sc.write(buffer) == 0) {
+                System.out.println(buffer);
                 buffer.compact();
                 return;
             }
@@ -77,6 +80,8 @@ public class JarRetServer {
             buffer.compact();
 
             if (buffer.position() == 0) {
+                buffer.clear();
+                System.out.println(state);
                 switch (state) {
                     case TASK:
                         // TODO : Response wait
@@ -85,6 +90,7 @@ public class JarRetServer {
                     case END:
                         // TODO : End ?
                         buffer.clear();
+                        System.out.println("END");
                         state = State.CONNECTION;
                         break;
                     default:
@@ -115,7 +121,7 @@ public class JarRetServer {
                     } else {
                         // TODO : Comeback
                         System.out.println("TASK");
-                        Charset contentCharset = (header.getCharset() != null) ? header.getCharset() : CHARSET_ASCII;
+                        Charset contentCharset = (header.getCharset() != null) ? header.getCharset() : Charset.forName("UTF-8");
 
                         jobMonitor = jobList.get(0);
 
@@ -131,15 +137,30 @@ public class JarRetServer {
                     break;
                 case RESPONSE:
                     ObjectMapper mapper = new ObjectMapper();
-                    HashMap<String, Object> map = mapper.readValue(reader.readBytes(header.getContentLength()).flip().toString(), HashMap.class);
+                    ByteBuffer tmp = reader.readBytes(header.getContentLength());
+                    buffer.clear();
+                    tmp.flip();
+                    buffer.put(tmp);
+                    buffer.flip();
+                    long jobId = buffer.getLong();
+                    int taskId = buffer.getInt();
 
+                    Charset charset = header.getCharset();
+
+                    if (charset == null)
+                        charset = Charset.forName("UTF-8");
+
+                    String string = charset.decode(buffer).toString();
+                    System.out.println(jobId + " " + taskId + " " + string);
+
+                    HashMap<String, Object> map = mapper.readValue(string, HashMap.class);
+
+                    buffer.clear();
                     System.out.println("RESPONSE");
                     Object answer = map.get("Answer");
 
-                    buffer.clear();
                     if (answer == null) {
                         Object error = map.get("Error");
-                        buffer.clear();
 
                         if (error == null) {
                             buffer.put(CHARSET_ASCII.encode(badRequest()));
@@ -148,14 +169,16 @@ public class JarRetServer {
                             buffer.put(CHARSET_ASCII.encode(ok()));
                         }
                     } else {
-                        jobMonitor.updateATask(Integer.parseInt((String) map.get("Task")), (String) answer);
+                        jobMonitor.updateATask(Integer.parseInt((String) map.get("Task")), answer.toString());
                         buffer.put(CHARSET_ASCII.encode(ok()));
                     }
 
+                    System.out.println(buffer);
                     state = State.END;
                     break;
             }
 
+            System.out.println("WRITE ?");
             key.interestOps(SelectionKey.OP_WRITE);
         }
 
