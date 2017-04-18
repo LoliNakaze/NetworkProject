@@ -44,7 +44,7 @@ public class JarRetClient {
 		ByteBuffer bu = ByteBuffer.allocate(1024);
 		sc.read(bu);
 		bu.flip();
-		System.out.println(ASCII.decode(bu).toString());
+		System.out.println("Server answer to client's POST request: \n" + ASCII.decode(bu).toString());
 	}
 
 	/** Return the last line of the content of the JSON inside the content of the POST request.
@@ -190,7 +190,6 @@ public class JarRetClient {
 		return workers.computeIfAbsent(jobId, __ -> new HashMap<String, Worker>()).computeIfAbsent(workerVersion,
 				__ -> {
 					try {
-						System.out.println("On connait pas ce worker. On demande une nouvelle creation.");
 						return WorkerFactory.getWorker(serverAnswer.getWorkerURL(), serverAnswer.getWorkerClassName());
 					} catch (Exception e) {
 						throw new IllegalArgumentException();
@@ -213,14 +212,13 @@ public class JarRetClient {
 		try {
 			sc = SocketChannel.open(new InetSocketAddress(host, port));
 		} catch (IOException e) {
-			System.err.println("La connexion a echouï¿½");
+			System.err.println("Connexion failed");
 			e.printStackTrace();
 		}
 		JarRetClient jarRetClient = new JarRetClient();
-		int i = 0;
 
 		/*-------BOUCLE PRINCIPALE--------*/
-		while (true) {
+		while (!Thread.interrupted()) {
 
 			String GETRequest = createGetRequest(sc.getRemoteAddress());
 			sc.write(ASCII.encode(GETRequest));
@@ -243,10 +241,10 @@ public class JarRetClient {
 				Thread.sleep(waitSeconds * 1000);
 				continue;
 			}
-			System.out.println("on demande une instance");
+			
 			Worker worker = jarRetClient.returnAWorker(serverAnswer.getJobId(), serverAnswer.getWorkerVersion(),
 					serverAnswer);
-			System.out.println("L'instance est crée.");
+			
 			String contentWithoutLastLine = createContentWithoutLastLine(serverAnswer);
 			String lastLine = computeLastLine(worker, serverAnswer.getTaskNumber());
 			String contentToSend = new StringBuilder(contentWithoutLastLine).append(lastLine).toString();
@@ -256,10 +254,10 @@ public class JarRetClient {
 			sc.write(buffToSend);
 
 			readServerAnswerAfterPost(sc);
-			i++; 
+			Thread.sleep(1000);
 		}
 
-//		sc.close();
+		sc.close();
 
 	}
 
