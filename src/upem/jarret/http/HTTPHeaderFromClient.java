@@ -8,14 +8,14 @@ import java.util.*;
  *         Class representing a HTTP header
  */
 
-public class HTTPHeaderFromClient extends HTTPHeaderAbstract implements HTTPHeader {
+class HTTPHeaderFromClient extends HTTPHeaderAbstract implements HTTPHeader {
     private HTTPHeaderFromClient(String response, String version, Map<String, String> fields) throws HTTPException {
         this.response = response;
         this.version = version;
         this.fields = Collections.unmodifiableMap(fields);
     }
     
-    public static HTTPHeaderFromClient create(String response, Map<String,String> fields) throws HTTPException {
+    static HTTPHeaderFromClient create(String response, Map<String, String> fields) throws HTTPException {
         String[] tokens = response.split(" ");
         // Treatment of the response line
         HTTPException.ensure(tokens.length >= 2, "Badly formed response:\n" + response);

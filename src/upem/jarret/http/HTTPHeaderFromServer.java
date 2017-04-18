@@ -5,7 +5,7 @@ import java.util.*;
 /**
  * Created by nakaze on 18/04/17.
  */
-public class HTTPHeaderFromServer extends HTTPHeaderAbstract implements HTTPHeader {
+class HTTPHeaderFromServer extends HTTPHeaderAbstract implements HTTPHeader {
     /**
      * Supported versions of the HTTP Protocol
      */

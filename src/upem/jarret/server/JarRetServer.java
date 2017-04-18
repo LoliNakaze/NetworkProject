@@ -63,7 +63,6 @@ public class JarRetServer {
         void doWrite() throws IOException {
             buffer.flip();
 
-            System.out.println(buffer);
             if (sc.write(buffer) == 0) {
                 buffer.compact();
                 return;
@@ -73,7 +72,6 @@ public class JarRetServer {
 
             if (buffer.position() == 0) {
                 buffer.clear();
-                System.out.println(state);
                 switch (state) {
                     case TASK:
                         // TODO : Response wait
@@ -112,7 +110,7 @@ public class JarRetServer {
                         // TODO : Comeback --- OK
                         if (!jobList.stream().filter(j -> !(j.isComplete())).findAny().isPresent()) {
                             buffer.put(CHARSET_ASCII.encode(comeback()));
-                            System.out.println("Comback");
+                            System.out.println("Comeback");
                             state = State.END;
                             break;
                         }
@@ -234,6 +232,10 @@ public class JarRetServer {
         commandMap.put(Command.SHOW, this::printKeys);
     }
 
+    /**
+     * Launches the server.
+     * @throws IOException
+     */
     public void launch() throws IOException {
         listener.start();
 

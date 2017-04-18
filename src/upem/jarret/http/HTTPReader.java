@@ -35,10 +35,22 @@ public interface HTTPReader {
      */
     String readLineCRLF() throws IOException;
 
+    /**
+     * Use an HTTPReader which use TCP in blocking mode.
+     * @param sc The channel used to read the incoming bytes.
+     * @param buff The buffer used to manipulate the incoming bytes.
+     * @return The HTTPReader
+     */
     static HTTPReader useBlockingReader(SocketChannel sc, ByteBuffer buff) {
         return new BlockingHTTPReader(sc, buff);
     }
 
+
+    /**
+     * Use an HTTPReader which use a fully-read ByteBuffer as an input stream.
+     * @param buffer The buffer
+     * @return The HTTPReader
+     */
     static HTTPReader useStringReader(ByteBuffer buffer) {
         return new StringReader(buffer);
     }
