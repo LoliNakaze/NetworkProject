@@ -64,10 +64,11 @@ public class JarRetClient {
 		} catch (Exception e) {
 			finalLine = "\"Error\" : \"Computation error\"}";
 		}
-		if (isNested(computeAnswer)) {
-			finalLine = "\"Error\" : \"Answer is nested\"}";
-		} else if (isInvalidJson(computeAnswer)) {
+		if (isInvalidJson(computeAnswer)) {
 			finalLine = "\"Error\" : \"Answer is not valid JSON\"}";
+		}
+		else if (isNested(computeAnswer)) {
+			finalLine = "\"Error\" : \"Answer is nested\"}";
 		} else if (finalLine.isEmpty()) {
 			finalLine = new StringBuilder("\"Answer\": ").append(computeAnswer).append("}").toString();
 		}
@@ -76,7 +77,7 @@ public class JarRetClient {
 	}
 
 	/**
-	 * @param host
+	 * @param host				the address of the server 
 	 * @param serverAnswer		Contain a map with all the informations contained in the initial answer of the server
 	 * @param contentWithoutLastLine	all the Json to send to the server without the last line. We'll use it in case we need to create a modify the last line of the request
 	 * @param contentToSend	All the JSON that will be the content of the request.
@@ -104,8 +105,9 @@ public class JarRetClient {
 		return buffToSend;
 	}
 
-	/**
-	 * @param sa
+	/**			Check if the server's answer contain an instruction to wait and come back after a number of seconds
+	 * 			Returns the number of second to wait.
+	 * @param sa  ServerAnswer that contains all the informations of the answer of the Server
 	 * @return the number of second the client need to wait before asking again to the server a task
 	 */
 	private static int checkWait(ServerAnswer sa) {
@@ -116,9 +118,9 @@ public class JarRetClient {
 		return 0;
 	}
 
-	/**
-	 * @param json
-	 * @return
+	/**	Check if the json parameter is valid or not
+	 * @param json	JSON string to test 
+	 * @return	true if the Json is valid. false if the Json is invalid
 	 * @throws IOException
 	 */
 	private static boolean isInvalidJson(String json) throws IOException {
@@ -131,6 +133,12 @@ public class JarRetClient {
 		return false;
 	}
 
+	/**	Check if the JSON parameter is compose of other JSON objects
+	 * @param json	The JSON string to test
+	 * @return	boolean that indicates if the JSON String is nested or not
+	 * @throws JsonProcessingException
+	 * @throws IOException
+	 */
 	private static boolean isNested(String json) throws JsonProcessingException, IOException {
 		Iterator<JsonNode> it = mapper.readTree(json).iterator();
 		for (JsonNode node : it.next()) {
@@ -141,6 +149,11 @@ public class JarRetClient {
 		return false;
 	}
 
+	/**	return a POST header containing the CONTENT-LENGTH of the request.
+	 * @param adressServer		The address of the server.
+	 * @param contentLength		
+	 * @return	The POST HEADER as a string
+	 */
 	static String createHeaderToPost(String adressServer, int contentLength) {
 		StringBuilder sb = new StringBuilder();
 
@@ -151,15 +164,25 @@ public class JarRetClient {
 		return sb.toString();
 	}
 
-	static String createContentWithoutFinalLine(ServerAnswer sa) {
-		StringBuilder noLastLine = new StringBuilder();
-		noLastLine.append("{\"JobId\": \"").append(sa.getJobId()).append("\", \"WorkerVersion\": \"")
+	/**	return the content of the POST request without the last line (see the  computeLastLine method)
+	 * @param sa
+	 * @return
+	 */
+	static String createContentWithoutLastLine(ServerAnswer sa) {
+		StringBuilder contentWithoutLastLine = new StringBuilder();
+		contentWithoutLastLine.append("{\"JobId\": \"").append(sa.getJobId()).append("\", \"WorkerVersion\": \"")
 				.append(sa.getWorkerVersion()).append("\", \"WorkerURL\": \"").append(sa.getWorkerURL())
 				.append("\", \"WorkerClassName\": \"").append(sa.getWorkerClassName()).append("\", \"Task\": \"")
 				.append(sa.getTaskNumber()).append("\", \"ClientId\": \"").append(sa.getClientId()).append("\",");
-		return noLastLine.toString();
+		return contentWithoutLastLine.toString();
 	}
 
+	/** Return a new instance of Worker for the jobId and workerVersion parameters or an already existing instance stored in the workers map
+	 * @param jobId		the jobId
+	 * @param workerVersion		The workerVersion for the worker associated to this JobId
+	 * @param serverAnswer		serverAnswer contains all the information of the answer from the server.
+	 * @return	an instance that implements the Worker interface.
+	 */
 	private Worker returnAWorker(Long jobId, String workerVersion, ServerAnswer serverAnswer) {
 
 		return workers.computeIfAbsent(jobId, __ -> new HashMap<String, Worker>()).computeIfAbsent(workerVersion,
@@ -219,7 +242,7 @@ public class JarRetClient {
 			Worker worker = jarRetClient.returnAWorker(serverAnswer.getJobId(), serverAnswer.getWorkerVersion(),
 					serverAnswer);
 
-			String contentWithoutLastLine = createContentWithoutFinalLine(serverAnswer);
+			String contentWithoutLastLine = createContentWithoutLastLine(serverAnswer);
 			String lastLine = computeLastLine(worker, serverAnswer.getTaskNumber());
 			String contentToSend = new StringBuilder(contentWithoutLastLine).append(lastLine).toString();
 
