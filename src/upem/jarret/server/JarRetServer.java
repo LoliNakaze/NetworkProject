@@ -15,7 +15,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
-import java.util.stream.IntStream;
 
 /**
  * Created by nakaze on 15/04/17.
@@ -37,22 +36,16 @@ public class JarRetServer {
         private final SelectionKey key;
         private final SocketChannel sc;
         private JobMonitor jobMonitor = null;
-        private StringBuilder response = new StringBuilder();
 
         private State state;
-        private StringBuilder stringBuilder = new StringBuilder();
-
-        private HTTPReader reader;
-        private final ArrayList<String> stringList = new ArrayList<>();
 
         public Context(SelectionKey key) {
             this.key = key;
             this.sc = (SocketChannel) key.channel();
-//            reader = HTTPReader.useNonBlockingReader(sc, buffer);
             state = State.CONNECTION;
         }
 
-        public void doRead() throws IOException {
+        void doRead() throws IOException {
             int read;
 
             if ((read = sc.read(buffer)) == -1) {
@@ -67,7 +60,7 @@ public class JarRetServer {
             analyzeAnswer();
         }
 
-        public void doWrite() throws IOException {
+        void doWrite() throws IOException {
             buffer.flip();
 
             System.out.println(buffer);
@@ -220,7 +213,6 @@ public class JarRetServer {
     private final Thread listener = new Thread(() -> startCommandListener(System.in));
 
     private final ArrayBlockingQueue<Command> commandQueue = new ArrayBlockingQueue<>(5);
-    private Command command;
     private Map<Command, Runnable> commandMap = new EnumMap<>(Command.class);
     private final Object lock = new Object();
 
@@ -251,7 +243,7 @@ public class JarRetServer {
         while (!Thread.interrupted()) {
             selector.select();
 
-            command = commandQueue.poll();
+            Command command = commandQueue.poll();
             if (command != null) commandMap.get(command).run();
 
             processSelectedKeys();
@@ -282,7 +274,6 @@ public class JarRetServer {
                 }
             }
         } catch (InterruptedException e) {
-            return;
         }
     }
 
