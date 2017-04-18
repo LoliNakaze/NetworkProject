@@ -263,6 +263,7 @@ public class JarRetClient {
 			buffToSend.flip();
 			sc.write(buffToSend);
 
+			System.out.println("The worker " + serverAnswer.getWorkerClassName() + " finished its job.");
 			readServerAnswerAfterPost(sc);
 		}
 

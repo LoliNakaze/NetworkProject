@@ -1,4 +1,1 @@
-# NetworkProject
-Ne-il entre en scene!
-
-Apres clonage
+Toute la documentation se trouve dans /docs
