@@ -77,6 +77,19 @@ public class JarRetClient {
 
 		return finalLine;
 	}
+	
+	/**	return the content of the POST request without the last line (see the  computeLastLine method)
+	 * @param sa
+	 * @return
+	 */
+	static String createContentWithoutLastLine(ServerAnswer sa) {
+		StringBuilder contentWithoutLastLine = new StringBuilder();
+		contentWithoutLastLine.append("{\"JobId\": \"").append(sa.getJobId()).append("\", \"WorkerVersion\": \"")
+				.append(sa.getWorkerVersion()).append("\", \"WorkerURL\": \"").append(sa.getWorkerURL())
+				.append("\", \"WorkerClassName\": \"").append(sa.getWorkerClassName()).append("\", \"Task\": \"")
+				.append(sa.getTaskNumber()).append("\", \"ClientId\": \"").append(sa.getClientId()).append("\",");
+		return contentWithoutLastLine.toString();
+	}
 
 	/**
 	 * @param host				the address of the server 
@@ -166,18 +179,6 @@ public class JarRetClient {
 		return sb.toString();
 	}
 
-	/**	return the content of the POST request without the last line (see the  computeLastLine method)
-	 * @param sa
-	 * @return
-	 */
-	static String createContentWithoutLastLine(ServerAnswer sa) {
-		StringBuilder contentWithoutLastLine = new StringBuilder();
-		contentWithoutLastLine.append("{\"JobId\": \"").append(sa.getJobId()).append("\", \"WorkerVersion\": \"")
-				.append(sa.getWorkerVersion()).append("\", \"WorkerURL\": \"").append(sa.getWorkerURL())
-				.append("\", \"WorkerClassName\": \"").append(sa.getWorkerClassName()).append("\", \"Task\": \"")
-				.append(sa.getTaskNumber()).append("\", \"ClientId\": \"").append(sa.getClientId()).append("\",");
-		return contentWithoutLastLine.toString();
-	}
 
 	/** Return a new instance of Worker for the jobId and workerVersion parameters or an already existing instance stored in the workers map
 	 * @param jobId		the jobId
@@ -200,14 +201,23 @@ public class JarRetClient {
 
 	}
 
-	
+	private static void usage(){
+		System.out.println("Usage: JarRetClient <hostname> <port>");
+	}
 	
 	public static void main(String[] args) throws IOException, InterruptedException {
 //		String host = "ns3001004.ip-5-196-73.eu";
 //		int port = 8080;
-		String host = "localhost";
-		int port = 7777;
+//		String host = "localhost";
+//		int port = 7777;
+		String host = args[0];
+		int port = Integer.valueOf( args[1]) ;
 
+		if (args.length !=2){
+			usage();
+			return;
+		}
+		
 		SocketChannel sc = null;
 		try {
 			sc = SocketChannel.open(new InetSocketAddress(host, port));
@@ -254,7 +264,6 @@ public class JarRetClient {
 			sc.write(buffToSend);
 
 			readServerAnswerAfterPost(sc);
-			Thread.sleep(1000);
 		}
 
 		sc.close();
