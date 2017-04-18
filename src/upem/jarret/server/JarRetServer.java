@@ -63,7 +63,6 @@ public class JarRetServer {
         void doWrite() throws IOException {
             buffer.flip();
 
-            System.out.println(buffer);
             if (sc.write(buffer) == 0) {
                 buffer.compact();
                 return;
@@ -73,14 +72,11 @@ public class JarRetServer {
 
             if (buffer.position() == 0) {
                 buffer.clear();
-                System.out.println(state);
                 switch (state) {
                     case TASK:
-                        // TODO : Response wait
                         state = State.RESPONSE;
                         break;
                     case END:
-                        // TODO : End ?
                         buffer.clear();
                         System.out.println("END");
                         state = State.CONNECTION;
@@ -94,9 +90,7 @@ public class JarRetServer {
         }
 
         private void analyzeAnswer() throws IOException {
-            ByteBuffer duplicate = buffer.duplicate();
-            duplicate.flip();
-            System.out.println(CHARSET_ASCII.decode(duplicate).toString());
+//            printBuffer(buffer);
 
             HTTPReader reader = HTTPReader.useStringReader(buffer);
             HTTPHeader header = reader.readHeader();
@@ -109,10 +103,9 @@ public class JarRetServer {
                         buffer.put(CHARSET_ASCII.encode(badRequest()));
                         state = State.END;
                     } else {
-                        // TODO : Comeback --- OK
                         if (!jobList.stream().filter(j -> !(j.isComplete())).findAny().isPresent()) {
                             buffer.put(CHARSET_ASCII.encode(comeback()));
-                            System.out.println("Comback");
+                            System.out.println("Comeback");
                             state = State.END;
                             break;
                         }
@@ -170,6 +163,12 @@ public class JarRetServer {
             }
 
             key.interestOps(SelectionKey.OP_WRITE);
+        }
+
+        private void printBuffer(ByteBuffer buffer) {
+            ByteBuffer duplicate = buffer.duplicate();
+            duplicate.flip();
+            System.out.println(CHARSET_ASCII.decode(duplicate).toString());
         }
 
         private String badRequest() {
@@ -234,6 +233,10 @@ public class JarRetServer {
         commandMap.put(Command.SHOW, this::printKeys);
     }
 
+    /**
+     * Launches the server.
+     * @throws IOException
+     */
     public void launch() throws IOException {
         listener.start();
 
@@ -291,7 +294,6 @@ public class JarRetServer {
                     cntxt.doRead();
                 }
             } catch (IOException e) {
-                e.printStackTrace();
                 silentlyClose(key.channel());
             }
         }

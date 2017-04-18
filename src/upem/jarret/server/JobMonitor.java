@@ -18,7 +18,7 @@ import java.util.stream.Stream;
  * Created by nakaze on 17/04/17.
  */
 
-public class JobMonitor implements Closeable {
+class JobMonitor implements Closeable {
     static class Job {
         private String JobId;
         private String JobTaskNumber;
@@ -142,7 +142,7 @@ public class JobMonitor implements Closeable {
         writer = new BufferedWriter(new OutputStreamWriter(out));
     }
 
-    public int getJobPriority() {
+    int getJobPriority() {
         return Integer.parseInt(job.getJobPriority());
     }
 
@@ -150,7 +150,7 @@ public class JobMonitor implements Closeable {
         return jobPrioritySum;
     }
 
-    public boolean isComplete() {
+    boolean isComplete() {
         return Integer.parseInt(job.getJobTaskNumber()) == bitSet.cardinality();
     }
 
@@ -159,7 +159,7 @@ public class JobMonitor implements Closeable {
         return nextId;
     }
 
-    public static List<JobMonitor> jobMonitorListFromFile(Path path) throws IOException {
+    static List<JobMonitor> jobMonitorListFromFile(Path path) throws IOException {
         return Job.joblistFromFile(path).stream().map(j -> {
             try {
                 return new JobMonitor(j);
@@ -169,7 +169,7 @@ public class JobMonitor implements Closeable {
         }).collect(Collectors.toList());
     }
 
-    public String sendTask() {
+    String sendTask() {
         return "{"
                 + "\"JobId\":\"" + job.getJobId() + "\","
                 + "\"WorkerVersion\":\"" + job.getWorkerVersionNumber() + "\","
@@ -178,7 +178,7 @@ public class JobMonitor implements Closeable {
                 + "\"Task\":\"" + getNextTask() + "\"}";
     }
 
-    public void updateATask(int task, String response) throws IOException {
+    void updateATask(int task, String response) throws IOException {
         if (bitSet.get(task))
             return;
 
