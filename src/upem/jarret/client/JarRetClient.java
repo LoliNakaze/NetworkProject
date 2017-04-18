@@ -44,7 +44,7 @@ public class JarRetClient {
 		ByteBuffer bu = ByteBuffer.allocate(1024);
 		sc.read(bu);
 		bu.flip();
-		System.out.println(ASCII.decode(bu).toString());
+		System.out.println("Server answer to client's POST request: \n" + ASCII.decode(bu).toString());
 	}
 
 	/** Return the last line of the content of the JSON inside the content of the POST request.
@@ -76,6 +76,19 @@ public class JarRetClient {
 		}
 
 		return finalLine;
+	}
+	
+	/**	return the content of the POST request without the last line (see the  computeLastLine method)
+	 * @param sa
+	 * @return
+	 */
+	static String createContentWithoutLastLine(ServerAnswer sa) {
+		StringBuilder contentWithoutLastLine = new StringBuilder();
+		contentWithoutLastLine.append("{\"JobId\": \"").append(sa.getJobId()).append("\", \"WorkerVersion\": \"")
+				.append(sa.getWorkerVersion()).append("\", \"WorkerURL\": \"").append(sa.getWorkerURL())
+				.append("\", \"WorkerClassName\": \"").append(sa.getWorkerClassName()).append("\", \"Task\": \"")
+				.append(sa.getTaskNumber()).append("\", \"ClientId\": \"").append(sa.getClientId()).append("\",");
+		return contentWithoutLastLine.toString();
 	}
 
 	/**
@@ -166,18 +179,6 @@ public class JarRetClient {
 		return sb.toString();
 	}
 
-	/**	return the content of the POST request without the last line (see the  computeLastLine method)
-	 * @param sa
-	 * @return
-	 */
-	static String createContentWithoutLastLine(ServerAnswer sa) {
-		StringBuilder contentWithoutLastLine = new StringBuilder();
-		contentWithoutLastLine.append("{\"JobId\": \"").append(sa.getJobId()).append("\", \"WorkerVersion\": \"")
-				.append(sa.getWorkerVersion()).append("\", \"WorkerURL\": \"").append(sa.getWorkerURL())
-				.append("\", \"WorkerClassName\": \"").append(sa.getWorkerClassName()).append("\", \"Task\": \"")
-				.append(sa.getTaskNumber()).append("\", \"ClientId\": \"").append(sa.getClientId()).append("\",");
-		return contentWithoutLastLine.toString();
-	}
 
 	/** Return a new instance of Worker for the jobId and workerVersion parameters or an already existing instance stored in the workers map
 	 * @param jobId		the jobId
@@ -190,7 +191,6 @@ public class JarRetClient {
 		return workers.computeIfAbsent(jobId, __ -> new HashMap<String, Worker>()).computeIfAbsent(workerVersion,
 				__ -> {
 					try {
-						System.out.println("On connait pas ce worker. On demande une nouvelle creation.");
 						return WorkerFactory.getWorker(serverAnswer.getWorkerURL(), serverAnswer.getWorkerClassName());
 					} catch (Exception e) {
 						throw new IllegalArgumentException();
@@ -201,26 +201,34 @@ public class JarRetClient {
 
 	}
 
-	
+	private static void usage(){
+		System.out.println("Usage: JarRetClient <hostname> <port>");
+	}
 	
 	public static void main(String[] args) throws IOException, InterruptedException {
 //		String host = "ns3001004.ip-5-196-73.eu";
 //		int port = 8080;
-		String host = "localhost";
-		int port = 7777;
+//		String host = "localhost";
+//		int port = 7777;
+		String host = args[0];
+		int port = Integer.valueOf( args[1]) ;
 
+		if (args.length !=2){
+			usage();
+			return;
+		}
+		
 		SocketChannel sc = null;
 		try {
 			sc = SocketChannel.open(new InetSocketAddress(host, port));
 		} catch (IOException e) {
-			System.err.println("La connexion a echouï¿½");
+			System.err.println("Connexion failed");
 			e.printStackTrace();
 		}
 		JarRetClient jarRetClient = new JarRetClient();
-		int i = 0;
 
 		/*-------BOUCLE PRINCIPALE--------*/
-		while (true) {
+		while (!Thread.interrupted()) {
 
 			String GETRequest = createGetRequest(sc.getRemoteAddress());
 			sc.write(ASCII.encode(GETRequest));
@@ -243,10 +251,10 @@ public class JarRetClient {
 				Thread.sleep(waitSeconds * 1000);
 				continue;
 			}
-			System.out.println("on demande une instance");
+			
 			Worker worker = jarRetClient.returnAWorker(serverAnswer.getJobId(), serverAnswer.getWorkerVersion(),
 					serverAnswer);
-			System.out.println("L'instance est crée.");
+			
 			String contentWithoutLastLine = createContentWithoutLastLine(serverAnswer);
 			String lastLine = computeLastLine(worker, serverAnswer.getTaskNumber());
 			String contentToSend = new StringBuilder(contentWithoutLastLine).append(lastLine).toString();
@@ -256,10 +264,9 @@ public class JarRetClient {
 			sc.write(buffToSend);
 
 			readServerAnswerAfterPost(sc);
-			i++; 
 		}
 
-//		sc.close();
+		sc.close();
 
 	}
 
