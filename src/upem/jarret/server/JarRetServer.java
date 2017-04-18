@@ -35,6 +35,9 @@ public class JarRetServer {
         private State state;
         private StringBuilder stringBuilder = new StringBuilder();
 
+        private HTTPReader reader;
+        private final ArrayList<String> stringList = new ArrayList<>();
+
         enum State {
             CONNECTION, TASK, RESPONSE, END
         }
@@ -42,24 +45,21 @@ public class JarRetServer {
         public Context(SelectionKey key) {
             this.key = key;
             this.sc = (SocketChannel) key.channel();
+//            reader = HTTPReader.useNonBlockingReader(sc, buffer);
             state = State.CONNECTION;
         }
 
         public void doRead() throws IOException {
-            if (sc.read(buffer) == -1) {
+            int read;
+
+            if ((read = sc.read(buffer)) == -1) {
                 inputClosed = true;
             }
 
-            switch (state) {
-                case CONNECTION:
-                    // TODO : Read the header and check format
-                    break;
-                case RESPONSE:
-                    // TODO : Read the header and the response.
-                    break;
-                default:
-                    throw new IllegalStateException("Impossible state in read mode: " + state.toString());
-            }
+            if (read == 0)
+                return;
+
+            analyzeAnswer();
         }
 
         public void doWrite() throws IOException {
@@ -68,6 +68,8 @@ public class JarRetServer {
                 buffer.compact();
                 return;
             }
+
+            buffer.compact();
 
             if (buffer.position() == 0) {
                 switch (state) {
@@ -82,11 +84,12 @@ public class JarRetServer {
                     default:
                         throw new IllegalStateException("Impossible state in write mode: " + state.toString());
                 }
+
+                key.interestOps(SelectionKey.OP_READ);
             }
         }
 
         private void analyzeAnswer() throws IOException {
-            //
             HTTPReader reader = HTTPReader.useStringReader(buffer);
             HTTPHeader header = reader.readHeader();
 
@@ -95,6 +98,7 @@ public class JarRetServer {
 
             switch (state) {
                 case CONNECTION:
+                    System.out.println("CONNECTION");
                     buffer.clear();
                     String[] split = header.getResponse().split(" ");
                     if (!(split[0].equals("GET") && split[1].equals("Task"))) {
@@ -102,12 +106,12 @@ public class JarRetServer {
                         state = State.END;
                     } else {
                         // TODO : Comeback
-
+                        System.out.println("TASK");
                         Charset contentCharset = (header.getCharset() != null) ? header.getCharset() : CHARSET_ASCII;
                         String task = jobMonitor.sendTask();
                         buffer.put(CHARSET_ASCII.encode(ok()));
-                        buffer.put(CHARSET_ASCII.encode("Content-type: application/json; charset=utf-8\r\n"
-                                + "Content-length: " + task.length() + "\r\n"
+                        buffer.put(CHARSET_ASCII.encode("Content-Type: application/json; charset=utf-8\r\n"
+                                + "Content-Length: " + task.length() + "\r\n"
                                 + "\r\n"));
                         buffer.put(contentCharset.encode(task));
 
@@ -115,6 +119,7 @@ public class JarRetServer {
                     }
                     break;
                 case RESPONSE:
+                    System.out.println("RESPONSE");
                     Object answer = map.get("Answer");
 
                     buffer.clear();
@@ -150,8 +155,8 @@ public class JarRetServer {
 
         private String comeback() {
             return ok()
-                    + "Content-type: application/json; charset=utf-8\r\n"
-                    + "Content-length: 199\r\n"
+                    + "Content-Type: application/json; charset=utf-8\r\n"
+                    + "Content-Length: 199\r\n"
                     + "\r\n"
                     + "{"
                     + "\"ComeBackInSeconds\" : 300"
@@ -271,12 +276,12 @@ public class JarRetServer {
     }
 
     public static void main(String[] args) throws NumberFormatException, IOException {
-        if (args.length != 1) {
+        if (args.length != 2) {
             usage();
             return;
         }
         JarRetServer server = new JarRetServer(Integer.parseInt(args[0]), Paths.get(args[1]));
-
+//        JarRetServer server = new JarRetServer(7777, Paths.get("resources/JarRetJobs.json"));
         server.launch();
     }
 
