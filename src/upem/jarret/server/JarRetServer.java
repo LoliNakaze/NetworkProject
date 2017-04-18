@@ -90,9 +90,7 @@ public class JarRetServer {
         }
 
         private void analyzeAnswer() throws IOException {
-            ByteBuffer duplicate = buffer.duplicate();
-            duplicate.flip();
-            System.out.println(CHARSET_ASCII.decode(duplicate).toString());
+//            printBuffer(buffer);
 
             HTTPReader reader = HTTPReader.useStringReader(buffer);
             HTTPHeader header = reader.readHeader();
@@ -165,6 +163,12 @@ public class JarRetServer {
             }
 
             key.interestOps(SelectionKey.OP_WRITE);
+        }
+
+        private void printBuffer(ByteBuffer buffer) {
+            ByteBuffer duplicate = buffer.duplicate();
+            duplicate.flip();
+            System.out.println(CHARSET_ASCII.decode(duplicate).toString());
         }
 
         private String badRequest() {
