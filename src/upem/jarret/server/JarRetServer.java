@@ -6,6 +6,7 @@ import upem.jarret.http.HTTPReader;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
@@ -14,6 +15,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.stream.IntStream;
 
 /**
  * Created by nakaze on 15/04/17.
@@ -25,7 +27,7 @@ public class JarRetServer {
 
     private static final Charset CHARSET_ASCII = Charset.forName("ASCII");
 
-    enum State {
+    private enum State {
         CONNECTION, TASK, RESPONSE, END
     }
 
@@ -57,6 +59,8 @@ public class JarRetServer {
                 inputClosed = true;
             }
 
+            // TODO
+
             if (read == 0)
                 return;
 
@@ -64,9 +68,9 @@ public class JarRetServer {
         }
 
         public void doWrite() throws IOException {
-   //         System.out.println(buffer);
+            //         System.out.println(buffer);
             buffer.flip();
-     //       System.out.println(buffer);
+            //       System.out.println(buffer);
 
             System.out.println(buffer);
             if (sc.write(buffer) == 0) {
@@ -107,21 +111,23 @@ public class JarRetServer {
             HTTPReader reader = HTTPReader.useStringReader(buffer);
             HTTPHeader header = reader.readHeader();
 
-            System.out.println("TEST CONNECTION");
             switch (state) {
                 case CONNECTION:
-                    System.out.println("CONNECTION");
                     buffer.clear();
                     String[] split = header.getResponse().split(" ");
                     if (!(split[0].equals("GET") && split[1].equals("Task"))) {
                         buffer.put(CHARSET_ASCII.encode(badRequest()));
                         state = State.END;
                     } else {
-                        // TODO : Comeback
-                        System.out.println("TASK");
+                        // TODO : Comeback --- OK
+                        if (!jobList.stream().filter(JobMonitor::isComplete).findAny().isPresent()) {
+                            buffer.put(CHARSET_ASCII.encode(comeback()));
+                            state = State.END;
+                            break;
+                        }
                         Charset contentCharset = (header.getCharset() != null) ? header.getCharset() : Charset.forName("UTF-8");
 
-                        jobMonitor = jobList.get(0);
+                        jobMonitor = randPriorityMonitor();
 
                         String task = jobMonitor.sendTask();
                         buffer.put(CHARSET_ASCII.encode(ok()));
@@ -149,12 +155,10 @@ public class JarRetServer {
                         charset = Charset.forName("UTF-8");
 
                     String string = charset.decode(buffer).toString();
-                    System.out.println(jobId + " " + taskId + " " + string);
 
                     HashMap<String, Object> map = mapper.readValue(string, HashMap.class);
 
                     buffer.clear();
-                    System.out.println("RESPONSE");
                     Object answer = map.get("Answer");
 
                     if (answer == null) {
@@ -170,13 +174,10 @@ public class JarRetServer {
                         jobMonitor.updateATask(Integer.parseInt((String) map.get("Task")), answer.toString());
                         buffer.put(CHARSET_ASCII.encode(ok()));
                     }
-
-                    System.out.println(buffer);
                     state = State.END;
                     break;
             }
 
-            System.out.println("WRITE ?");
             key.interestOps(SelectionKey.OP_WRITE);
         }
 
@@ -196,6 +197,18 @@ public class JarRetServer {
                     + "{"
                     + "\"ComeBackInSeconds\" : 300"
                     + "}";
+        }
+
+        private JobMonitor randPriorityMonitor() {
+            int randInt = rand.nextInt() % JobMonitor.getPrioritySum();
+
+            for (int i = 0, j = 0; i < jobList.size(); i++) {
+                j += jobList.get(i).getJobPriority();
+                if (j >= randInt)
+                    return jobList.get(i);
+            }
+
+            throw new IllegalStateException("Impossible state normally");
         }
     }
 
@@ -225,6 +238,7 @@ public class JarRetServer {
         commandMap.put(Command.FLUSH, () -> selector.keys().stream().filter(s -> !(s.channel() instanceof ServerSocketChannel)).forEach(k -> silentlyClose(k.channel())));
         commandMap.put(Command.SHUTDOWN, () -> {
             listener.interrupt();
+            closeAllMonitors();
             Thread.currentThread().interrupt();
         });
         commandMap.put(Command.SHOW, this::printKeys);
@@ -250,23 +264,27 @@ public class JarRetServer {
     private void startCommandListener(InputStream in) {
         Scanner scanner = new Scanner(in);
 
-        while (!Thread.interrupted() && scanner.hasNextLine()) {
-            String line = scanner.nextLine();
+        try {
+            while (!Thread.interrupted() && scanner.hasNextLine()) {
+                String line = scanner.nextLine();
 
-            switch (line) {
-                case "SHUTDOWN":
-                case "SHOW":
-                case "STOP":
-                case "FLUSH":
-                    synchronized (lock) {
-                        command = Command.valueOf(line);
-                    }
-                    selector.wakeup();
-                    break;
-                default:
-                    System.err.println("Unknown command.");
-                    break;
+                switch (line) {
+                    case "SHUTDOWN":
+                    case "SHOW":
+                    case "STOP":
+                    case "FLUSH":
+                        synchronized (lock) {
+                            commandQueue.put(Command.valueOf(line));
+                        }
+                        selector.wakeup();
+                        break;
+                    default:
+                        System.err.println("Unknown command.");
+                        break;
+                }
             }
+        } catch (InterruptedException e) {
+            return;
         }
     }
 
@@ -295,6 +313,16 @@ public class JarRetServer {
         sc.configureBlocking(false);
         SelectionKey clientKey = sc.register(selector, SelectionKey.OP_READ);
         clientKey.attach(new Context(clientKey));
+    }
+
+    private void closeAllMonitors() {
+        jobList.forEach(j -> {
+            try {
+                j.close();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        });
     }
 
     private static void silentlyClose(SelectableChannel sc) {
