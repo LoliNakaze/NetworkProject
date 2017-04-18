@@ -74,11 +74,9 @@ public class JarRetServer {
                 buffer.clear();
                 switch (state) {
                     case TASK:
-                        // TODO : Response wait
                         state = State.RESPONSE;
                         break;
                     case END:
-                        // TODO : End ?
                         buffer.clear();
                         System.out.println("END");
                         state = State.CONNECTION;
@@ -107,7 +105,6 @@ public class JarRetServer {
                         buffer.put(CHARSET_ASCII.encode(badRequest()));
                         state = State.END;
                     } else {
-                        // TODO : Comeback --- OK
                         if (!jobList.stream().filter(j -> !(j.isComplete())).findAny().isPresent()) {
                             buffer.put(CHARSET_ASCII.encode(comeback()));
                             System.out.println("Comeback");
