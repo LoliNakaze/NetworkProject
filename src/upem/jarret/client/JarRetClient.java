@@ -2,27 +2,19 @@ package upem.jarret.client;
 
 import upem.jarret.worker.Worker;
 import upem.jarret.worker.WorkerFactory;
-
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
-import java.net.MalformedURLException;
 import java.net.SocketAddress;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.Charset;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.Map;
 
 import org.codehaus.jackson.JsonNode;
 import org.codehaus.jackson.JsonProcessingException;
 import org.codehaus.jackson.map.ObjectMapper;
-
-import jdk.internal.org.objectweb.asm.tree.TryCatchBlockNode;
 
 public class JarRetClient {
 	static final Charset ASCII = Charset.forName("ASCII");
@@ -36,6 +28,120 @@ public class JarRetClient {
 		return "GET Task HTTP/1.1\r\nHOST:  " + serverAdress + "\r\n" + "\r\n";
 	}
 
+
+	private static void readServerAnswerAfterPost(SocketChannel sc) throws IOException {
+		ByteBuffer bu = ByteBuffer.allocate(1024);
+		sc.read(bu);
+		bu.flip();
+		System.out.println(ASCII.decode(bu).toString());
+	}
+
+	private static String computeLastLine(Worker worker, int taskNumber) throws IOException {
+		String computeAnswer = "";
+		String finalLine = "";
+		try {
+			computeAnswer = worker.compute(taskNumber);
+		} catch (Exception e) {
+			finalLine = "\"Error\" : \"Computation error\"}";
+		}
+		if (isNested(computeAnswer)) {
+			finalLine = "\"Error\" : \"Answer is nested\"}";
+		} else if (isInvalidJson(computeAnswer)) {
+			finalLine = "\"Error\" : \"Answer is not valid JSON\"}";
+		} else if (finalLine.isEmpty()) {
+			finalLine = new StringBuilder("\"Answer\": ").append(computeAnswer).append("}").toString();
+		}
+
+		return finalLine;
+	}
+
+	private static ByteBuffer createBufferToSend(String host, ServerAnswer serverAnswer, String contentNoFinal,
+			String contentToSend) {
+		String headerPostString = createHeaderToPost(host, Long.BYTES + Integer.BYTES + contentToSend.length());
+		ByteBuffer buffToSend = ByteBuffer.allocate(4096);
+		buffToSend.put(ASCII.encode(headerPostString));
+		buffToSend.putLong(serverAnswer.getJobId());
+		buffToSend.putInt(serverAnswer.getTaskNumber());
+		try {
+			buffToSend.put(UTF8.encode(contentToSend.toString()));
+		} catch (BufferOverflowException e) {
+			contentToSend = new StringBuilder(contentNoFinal).append(" \"Error\" : \"Too Long\"}").toString();
+			headerPostString = createHeaderToPost(host, Long.BYTES + Integer.BYTES + contentToSend.length());
+
+			buffToSend.clear();
+			buffToSend.put(ASCII.encode(headerPostString));
+			buffToSend.putLong(serverAnswer.getJobId());
+			buffToSend.putInt(serverAnswer.getTaskNumber());
+			buffToSend.put(UTF8.encode(contentToSend.toString()));
+		}
+		return buffToSend;
+	}
+
+	private static int checkWait(ServerAnswer sa) {
+		Object nbseconds = sa.map.get("ComeBackInSeconds");
+		if (nbseconds != null) {
+			return Integer.valueOf((String) nbseconds);
+		}
+		return 0;
+	}
+
+	private static boolean isInvalidJson(String json) throws IOException {
+		JsonNode node;
+		try {
+			node = mapper.readTree(json);
+		} catch (JsonProcessingException e) {
+			return true;
+		}
+		return false;
+	}
+
+	private static boolean isNested(String json) throws JsonProcessingException, IOException {
+		Iterator<JsonNode> it = mapper.readTree(json).iterator();
+		for (JsonNode node : it.next()) {
+			if (node.isObject()) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	static String createHeaderToPost(String adressServer, int contentLength) {
+		StringBuilder sb = new StringBuilder();
+
+		sb.append("POST Answer HTTP/1.1\r\n").append("Host: ").append(adressServer).append("\r\n")
+				.append("Content-Type: application/json\r\n").append("Content-Length: ").append(contentLength)
+				.append("\r\n").append("\r\n");
+
+		return sb.toString();
+	}
+
+	static String createContentWithoutFinalLine(ServerAnswer sa) {
+		StringBuilder noLastLine = new StringBuilder();
+		noLastLine.append("{\"JobId\": \"").append(sa.getJobId()).append("\", \"WorkerVersion\": \"")
+				.append(sa.getWorkerVersion()).append("\", \"WorkerURL\": \"").append(sa.getWorkerURL())
+				.append("\", \"WorkerClassName\": \"").append(sa.getWorkerClassName()).append("\", \"Task\": \"")
+				.append(sa.getTaskNumber()).append("\", \"ClientId\": \"").append(sa.getClientId()).append("\",");
+		return noLastLine.toString();
+	}
+
+	private Worker returnAWorker(Long jobId, String workerVersion, ServerAnswer serverAnswer) {
+
+		return workers.computeIfAbsent(jobId, __ -> new HashMap<String, Worker>()).computeIfAbsent(workerVersion,
+				__ -> {
+					try {
+						System.out.println("PAS TROUVER ON CREER UN NOUVEAU");
+						return WorkerFactory.getWorker(serverAnswer.getWorkerURL(), serverAnswer.getWorkerClassName());
+					} catch (Exception e) {
+						throw new IllegalArgumentException();
+					}
+				}
+
+		);
+
+	}
+
+	
+	
 	public static void main(String[] args) throws IOException, InterruptedException {
 		String host = "ns3001004.ip-5-196-73.eu";
 		int port = 8080;
@@ -53,8 +159,6 @@ public class JarRetClient {
 		while (i < 5) {
 
 			String GETRequest = createGetRequest(sc.getRemoteAddress());
-			// System.out.println(GETRequest);
-
 			sc.write(ASCII.encode(GETRequest));
 
 			HTTPReader reader = HTTPReader.useBlockingReader(sc, ByteBuffer.allocate(50));
@@ -62,178 +166,36 @@ public class JarRetClient {
 
 			ByteBuffer contentJson = reader.readBytes(getHeader.getContentLength());
 			contentJson.flip();
+			
+			/*We transform the Json from the server in a HashMap in ServerAnswer*/
 			ServerAnswer serverAnswer = new ServerAnswer(
 					mapper.readValue(getHeader.getCharset().decode(contentJson).toString(), HashMap.class));
-			
+			serverAnswer.putClientId("NEIL");
+
+			/*Gestion de l'attente*/
 			int waitSeconds = 0;
-			if ((waitSeconds = checkWait(serverAnswer)) != 0){
+			if ((waitSeconds = checkWait(serverAnswer)) != 0) {
 				System.out.println("ON DOIT ATTENDRE");
-				Thread.sleep(waitSeconds*1000);
+				Thread.sleep(waitSeconds * 1000);
 				continue;
 			}
 
 			Worker worker = jarRetClient.returnAWorker(serverAnswer.getJobId(), serverAnswer.getWorkerVersion(),
 					serverAnswer);
 
-			// System.out.println(worker);
+			String contentWithoutLastLine = createContentWithoutFinalLine(serverAnswer);
+			String lastLine = computeLastLine(worker, serverAnswer.getTaskNumber());
+			String contentToSend = new StringBuilder(contentWithoutLastLine).append(lastLine).toString();
 
-			String computeAnswerJson = "";
-			String finalLine = "";
-			try {
-				computeAnswerJson = worker.compute(serverAnswer.getTaskNumber());
-			} catch (Exception e) {
-				finalLine = "\"Error\" : \"Computation error\"";
-			}
-			
-			serverAnswer.putClientId("NEIL");
-			
-			if (isNested(computeAnswerJson)) {
-				finalLine = "\"Error\" : \"Answer is nested\"";
-			}
-			
-			else if( isInvalidJson(computeAnswerJson)){
-				finalLine = "\"Error\" : \"Answer is not valid JSON\"";
-			}
-			else if(finalLine.isEmpty()){
-				finalLine =  new StringBuilder("\"Answer\": ").append(computeAnswerJson).toString();
-			}
-			
-			String contentNoFinal = createContentWithoutFinalLine(serverAnswer);
-			
-			StringBuilder noFinalLine = new StringBuilder(contentNoFinal);
-			noFinalLine.append(finalLine).append("}");
-			
-			String contentToSend = noFinalLine.toString();
-		
-			System.out.println(contentToSend);
-			
-			String headerPostString = createHeaderToPost(host, Long.BYTES + Integer.BYTES + contentToSend.length());
-			
-			
-			ByteBuffer buffToSend = ByteBuffer.allocate(4096);
-			buffToSend.put(ASCII.encode(headerPostString));
-			buffToSend.putLong(serverAnswer.getJobId());
-			buffToSend.putInt(serverAnswer.getTaskNumber());
-			try {
-				buffToSend.put(UTF8.encode(contentToSend.toString()));	
-			} catch (BufferOverflowException e) {
-				contentToSend= new StringBuilder(contentNoFinal).append(" \"Error\" : \"Too Long\"}").toString(); 
-				headerPostString = createHeaderToPost(host, Long.BYTES + Integer.BYTES + contentToSend.length());
-
-				buffToSend.clear();
-				buffToSend.put(ASCII.encode(headerPostString));
-				buffToSend.putLong(serverAnswer.getJobId());
-				buffToSend.putInt(serverAnswer.getTaskNumber()); 
-				buffToSend.put(UTF8.encode(contentToSend.toString()));	
-			}
-			
-			
+			ByteBuffer buffToSend = createBufferToSend(host, serverAnswer, contentWithoutLastLine, contentToSend);
 			buffToSend.flip();
 			sc.write(buffToSend);
 
-			ByteBuffer bu = ByteBuffer.allocate(1024);
-			sc.read(bu);
-			bu.flip();
-			System.out.println(ASCII.decode(bu).toString());
-
+			readServerAnswerAfterPost(sc);
 			i++;
 		}
 
 		sc.close();
-
-	}
-
-	private static int checkWait(ServerAnswer sa) {
-		Object nbseconds = sa.map.get("ComeBackInSeconds");
-		if (nbseconds != null){
-			return Integer.valueOf( (String) nbseconds);
-		}
-		return 0;
-	}
-
-	private static boolean isInvalidJson(String json) throws IOException {
-		JsonNode node;
-		try {
-			node = mapper.readTree(json);
-		} catch (JsonProcessingException e) {
-			return true;
-		}
-		return false;
-	}
-
-	private static boolean isNested(String json) throws JsonProcessingException, IOException {
-		Iterator<JsonNode> it = mapper.readTree(json).iterator();
-		for(JsonNode node : it.next()){
-			if(node.isObject()){
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private static boolean isTooLong(String header, String json) {
-		if (header.length() + Long.BYTES + Integer.BYTES + json.length() > 4080){
-			return true;
-		}
-		return false;
-	}
-
-	
-	static String createHeaderToPost(String adressServer, int contentLength) {
-		StringBuilder sb = new StringBuilder();
-
-		sb.append("POST Answer HTTP/1.1\r\n").append("Host: ").append(adressServer).append("\r\n")
-				.append("Content-Type: application/json\r\n").append("Content-Length: ").append(contentLength)
-				.append("\r\n").append("\r\n");
-
-		return sb.toString();
-	}
-	
-	static String createContentWithoutFinalLine(ServerAnswer sa) {
-		StringBuilder jsonPost = new StringBuilder();
-		jsonPost.append("{\"JobId\": \"").append(sa.getJobId()).append("\", \"WorkerVersion\": \"")
-				.append(sa.getWorkerVersion()).append("\", \"WorkerURL\": \"").append(sa.getWorkerURL())
-				.append("\", \"WorkerClassName\": \"").append(sa.getWorkerClassName()).append("\", \"Task\": \"")
-				.append(sa.getTaskNumber()).append("\", \"ClientId\": \"").append(sa.getClientId()).append("\",");
-		return jsonPost.toString();
-	}
-	
-
-
-//	private static ByteBuffer createBufferForPost(String headerPost,String lastLine, ServerAnswer sa) {
-//		StringBuilder jsonPost = new StringBuilder();
-//		jsonPost.append("{\"JobId\": \"").append(sa.getJobId()).append("\", \"WorkerVersion\": \"")
-//				.append(sa.getWorkerVersion()).append("\", \"WorkerURL\": \"").append(sa.getWorkerURL())
-//				.append("\", \"WorkerClassName\": \"").append(sa.getWorkerClassName()).append("\", \"Task\": \"")
-//				.append(sa.getTaskNumber()).append("\", \"ClientId\": \"").append(sa.getClientId())
-//				.append("\", \"Answer\": ").append(sa.getComputeAnswerJson()).append("}");
-//
-//		System.out.println(jsonPost.toString());
-//
-//		String headerPost = createHeaderToPost(adressServer, Long.BYTES + Integer.BYTES + jsonPost.length());
-//
-//		ByteBuffer buffToSend = ByteBuffer.allocate(4096);
-//		buffToSend.put(ASCII.encode(headerPost));
-//		buffToSend.putLong(sa.getJobId());
-//		buffToSend.putInt(sa.getTaskNumber());
-//		buffToSend.put(UTF8.encode(jsonPost.toString()));
-//		buffToSend.flip();
-//		return buffToSend;
-//	}
-
-	private Worker returnAWorker(Long jobId, String workerVersion, ServerAnswer serverAnswer) {
-
-		return workers.computeIfAbsent(jobId, __ -> new HashMap<String, Worker>()).computeIfAbsent(workerVersion,
-				__ -> {
-					try {
-						System.out.println("PAS TROUVER ON CREER UN NOUVEAU");
-						return WorkerFactory.getWorker(serverAnswer.getWorkerURL(), serverAnswer.getWorkerClassName());
-					} catch (Exception e) {
-						throw new IllegalArgumentException();
-					}
-				}
-
-		);
 
 	}
 
