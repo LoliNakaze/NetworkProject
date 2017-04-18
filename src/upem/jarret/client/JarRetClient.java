@@ -23,12 +23,21 @@ public class JarRetClient {
 	HashMap<Long, HashMap<String, Worker>> workers = new HashMap<>();
 
 	static ObjectMapper mapper = new ObjectMapper();
-
+	
+	
+	/**Create a GET request that aim the server at serverAdress
+	 * @param serverAdress : The adress of the server
+	 * @return the GET request as a String
+	 */
 	static String createGetRequest(SocketAddress serverAdress) {
 		return "GET Task HTTP/1.1\r\nHOST:  " + serverAdress + "\r\n" + "\r\n";
 	}
 
 
+	/** Display the server's answer. This function is meant to be called after the POST request to check if everything was okay.
+	 * @param sc socketchannel used to read the answer of the server the client's POST
+	 * @throws IOException
+	 */
 	private static void readServerAnswerAfterPost(SocketChannel sc) throws IOException {
 		ByteBuffer bu = ByteBuffer.allocate(1024);
 		sc.read(bu);
@@ -36,6 +45,17 @@ public class JarRetClient {
 		System.out.println(ASCII.decode(bu).toString());
 	}
 
+	/** Return the last line of the content of the JSON inside the content of the POST request.
+	 * 	The last line can be
+	 * 1) the JSON answer return by Worker.compute(nbtask)
+	 * 2)" Error : computation "error if compute throwed an exception
+	 * 3)" Error : Answer is not valid JSON " if Worker.compute() returned an invalid JSON
+	 * 4)" Error: Answer is nested " if Worker.compute() returned a nested JSON
+	 * @param worker 			The instance of a class implementing Worker
+	 * @param taskNumber	The task that worker should compute
+	 * @return
+	 * @throws IOException
+	 */
 	private static String computeLastLine(Worker worker, int taskNumber) throws IOException {
 		String computeAnswer = "";
 		String finalLine = "";
@@ -55,7 +75,14 @@ public class JarRetClient {
 		return finalLine;
 	}
 
-	private static ByteBuffer createBufferToSend(String host, ServerAnswer serverAnswer, String contentNoFinal,
+	/**
+	 * @param host
+	 * @param serverAnswer		Contain a map with all the informations contained in the initial answer of the server
+	 * @param contentWithoutLastLine	all the Json to send to the server without the last line. We'll use it in case we need to create a modify the last line of the request
+	 * @param contentToSend	All the JSON that will be the content of the request.
+	 * @return the byte buffer containing the POST request
+	 */
+	private static ByteBuffer createBufferToSend(String host, ServerAnswer serverAnswer, String contentWithoutLastLine,
 			String contentToSend) {
 		String headerPostString = createHeaderToPost(host, Long.BYTES + Integer.BYTES + contentToSend.length());
 		ByteBuffer buffToSend = ByteBuffer.allocate(4096);
@@ -65,7 +92,7 @@ public class JarRetClient {
 		try {
 			buffToSend.put(UTF8.encode(contentToSend.toString()));
 		} catch (BufferOverflowException e) {
-			contentToSend = new StringBuilder(contentNoFinal).append(" \"Error\" : \"Too Long\"}").toString();
+			contentToSend = new StringBuilder(contentWithoutLastLine).append(" \"Error\" : \"Too Long\"}").toString();
 			headerPostString = createHeaderToPost(host, Long.BYTES + Integer.BYTES + contentToSend.length());
 
 			buffToSend.clear();
@@ -77,6 +104,10 @@ public class JarRetClient {
 		return buffToSend;
 	}
 
+	/**
+	 * @param sa
+	 * @return the number of second the client need to wait before asking again to the server a task
+	 */
 	private static int checkWait(ServerAnswer sa) {
 		Object nbseconds = sa.map.get("ComeBackInSeconds");
 		if (nbseconds != null) {
@@ -85,6 +116,11 @@ public class JarRetClient {
 		return 0;
 	}
 
+	/**
+	 * @param json
+	 * @return
+	 * @throws IOException
+	 */
 	private static boolean isInvalidJson(String json) throws IOException {
 		JsonNode node;
 		try {
@@ -192,7 +228,7 @@ public class JarRetClient {
 			sc.write(buffToSend);
 
 			readServerAnswerAfterPost(sc);
-			i++;
+			i++; 
 		}
 
 		sc.close();
