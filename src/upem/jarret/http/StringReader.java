@@ -23,15 +23,11 @@ class StringReader implements HTTPReader {
         String response = readLineCRLF();
         Map<String, String> fields = new HashMap<>();
         String line;
-
-        System.out.println(response);
-
             /*
              * On continue tant que l'on ne trouve pas LA FAMEUSE LIGNE VIDE !!!
              * APRES LA LIGNE C'EST LE CORPS !
              */
         while (!(line = readLineCRLF()).isEmpty()) {
-            System.out.println(line);
             String[] strings = line.split(":");
             fields.merge(
                     strings[0],
