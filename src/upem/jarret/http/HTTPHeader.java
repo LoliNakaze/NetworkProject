@@ -1,15 +1,15 @@
-package upem.jarret.client;
+package upem.jarret.http;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Created by nakaze on 18/04/17.
  */
 public interface HTTPHeader {
-    String[] LIST_SUPPORTED_VERSIONS = new String[]{"HTTP/1.0", "HTTP/1.1", "HTTP/1.2"};
-    Set<String> SUPPORTED_VERSIONS = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(LIST_SUPPORTED_VERSIONS)));
-
     static HTTPHeader createClientHeader(String response, Map<String, String> fields) throws HTTPException {
         return HTTPHeaderFromClient.create(response, fields);
     }

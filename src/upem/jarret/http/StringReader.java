@@ -1,4 +1,4 @@
-package upem.jarret.client;
+package upem.jarret.http;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -26,10 +26,10 @@ class StringReader implements HTTPReader {
 
         System.out.println(response);
 
-		/*
-         * On continue tant que l'on ne trouve pas LA FAMEUSE LIGNE VIDE !!!
-		 * APRES LA LIGNE C'EST LE CORPS !
-		 */
+            /*
+             * On continue tant que l'on ne trouve pas LA FAMEUSE LIGNE VIDE !!!
+             * APRES LA LIGNE C'EST LE CORPS !
+             */
         while (!(line = readLineCRLF()).isEmpty()) {
             System.out.println(line);
             String[] strings = line.split(":");
@@ -81,7 +81,7 @@ class StringReader implements HTTPReader {
         sb.delete(sb.length() - 2, sb.length());
 
         buffer.limit(limit);
-    /*Permet de traiter plus tard les données dans le buffer après \r\n */
+        /*Permet de traiter plus tard les données dans le buffer après \r\n */
         buffer.compact();
 
         return sb.toString();

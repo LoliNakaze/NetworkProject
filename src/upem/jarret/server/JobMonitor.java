@@ -18,7 +18,7 @@ import java.util.stream.Stream;
  * Created by nakaze on 17/04/17.
  */
 
-public class JobMonitor {
+public class JobMonitor implements Closeable {
     static class Job {
         private String JobId;
         private String JobTaskNumber;
@@ -130,16 +130,24 @@ public class JobMonitor {
     private Integer nextId = -1;
     private final Path path;
     private static int jobPrioritySum = 0;
+    private final OutputStream out;
+    private final BufferedWriter writer;
 
-    JobMonitor(Job job) {
+    JobMonitor(Job job) throws IOException {
         this.job = job;
         jobPrioritySum += Integer.parseInt(job.getJobPriority());
         path = Paths.get(job.getWorkerClassName() + "answers.txt");
         bitSet = new BitSet(Integer.parseInt(job.getJobTaskNumber()));
+        out = Files.newOutputStream(path, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
+        writer = new BufferedWriter(new OutputStreamWriter(out));
     }
 
     public int getJobPriority() {
         return Integer.parseInt(job.getJobPriority());
+    }
+
+    static int getPrioritySum() {
+        return jobPrioritySum;
     }
 
     public boolean isComplete() {
@@ -152,7 +160,13 @@ public class JobMonitor {
     }
 
     public static List<JobMonitor> jobMonitorListFromFile(Path path) throws IOException {
-        return Job.joblistFromFile(path).stream().map(JobMonitor::new).collect(Collectors.toList());
+        return Job.joblistFromFile(path).stream().map(j -> {
+            try {
+                return new JobMonitor(j);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }).collect(Collectors.toList());
     }
 
     public String sendTask() {
@@ -169,10 +183,12 @@ public class JobMonitor {
             return;
 
         bitSet.set(task);
-        try (OutputStream out = Files.newOutputStream(path, StandardOpenOption.APPEND, StandardOpenOption.CREATE);
-             BufferedWriter reader =
-                     new BufferedWriter(new OutputStreamWriter(out))) {
-            out.write((task + ":" + response).getBytes());
-        }
+        out.write((task + ":" + response + "\n").getBytes());
+    }
+
+    @Override
+    public void close() throws IOException {
+        out.close();
+        writer.close();
     }
 }

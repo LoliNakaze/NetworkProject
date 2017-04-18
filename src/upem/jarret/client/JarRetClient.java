@@ -1,5 +1,7 @@
 package upem.jarret.client;
 
+import upem.jarret.http.HTTPHeader;
+import upem.jarret.http.HTTPReader;
 import upem.jarret.worker.Worker;
 import upem.jarret.worker.WorkerFactory;
 import java.io.IOException;
@@ -218,7 +220,7 @@ public class JarRetClient {
 		int i = 0;
 
 		/*-------BOUCLE PRINCIPALE--------*/
-		while (i < 5) {
+		while (true) {
 
 			String GETRequest = createGetRequest(sc.getRemoteAddress());
 			sc.write(ASCII.encode(GETRequest));
@@ -257,7 +259,7 @@ public class JarRetClient {
 			i++; 
 		}
 
-		sc.close();
+//		sc.close();
 
 	}
 
