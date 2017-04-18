@@ -7,10 +7,8 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.Charset;
 import java.util.HashMap;
-import java.util.Map;
 
 import org.codehaus.jackson.map.ObjectMapper;
-import org.codehaus.jackson.type.TypeReference;
 
 import upem.jarret.worker.Worker;
 import upem.jarret.worker.WorkerFactory;
@@ -31,7 +29,7 @@ public class HTTPClient {
 
 		String request = "GET Task HTTP/1.1\r\nHOST:  " + host + "\r\n" + "\r\n";
 
-		System.out.println("Voici mon Client qui parle à: " + sc.getRemoteAddress() + "\nRequest ->\n" + request);
+		System.out.println("Voici mon Client qui parle ï¿½: " + sc.getRemoteAddress() + "\nRequest ->\n" + request);
 
 		sc.write(ASCII.encode(request));
 
@@ -61,7 +59,7 @@ public class HTTPClient {
 			System.out.println( instance.getClass().getName().equals(map.get("WorkerClassName")));
 
 		} catch (Exception e) {
-			System.err.println("Instance a foiré");
+			System.err.println("Instance a foirï¿½");
 		}
 		Integer numTask;
 		String jsonAnswer = null;
@@ -70,7 +68,7 @@ public class HTTPClient {
 			numTask = Integer.valueOf(((String) map.get("Task")));
 			jsonAnswer = instance.compute(numTask);
 		} catch (Exception e) {
-			System.err.println("Compute a foiré");
+			System.err.println("Compute a foirï¿½");
 		}
 
 		map.put("Answer", jsonAnswer);

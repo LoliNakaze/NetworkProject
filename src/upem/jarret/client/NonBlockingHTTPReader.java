@@ -41,7 +41,7 @@ public class NonBlockingHTTPReader implements HTTPReader {
         return null;
     }
 
-    public HTTPHeader readHeader(List<String> stringList) throws HTTPException {
+    public HTTPHeaderFromClient readHeader(List<String> stringList) throws HTTPException {
         Map<String, String> fields = new HashMap<>();
         stringList.stream().skip(1).forEach(line -> {
             String[] strings = line.split(":");
@@ -51,7 +51,7 @@ public class NonBlockingHTTPReader implements HTTPReader {
                     Arrays.stream(strings).skip(1).collect(Collectors.joining(":")),
                     (x, y) -> x + ";" + y);
         });
-        return HTTPHeader.create(stringList.get(0), fields);
+        return HTTPHeaderFromClient.create(stringList.get(0), fields);
     }
 
     private void setToEnd() {

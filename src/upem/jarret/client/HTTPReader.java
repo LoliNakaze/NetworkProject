@@ -3,7 +3,6 @@ package upem.jarret.client;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
-import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -14,29 +13,11 @@ import java.util.stream.Collectors;
  */
 public interface HTTPReader {
     /**
-     * @return The HTTPHeader object corresponding to the header read
+     * @return The HTTPHeaderFromClient object corresponding to the header read
      * @throws IOException HTTPException if the connection is closed before a header
      *                     could be read if the header is ill-formed
      */
-    default HTTPHeader readHeader() throws IOException {
-        String response = readLineCRLF();
-        Map<String, String> fields = new HashMap<>();
-        String line;
-
-		/*
-         * On continue tant que l'on ne trouve pas LA FAMEUSE LIGNE VIDE !!!
-		 * APRES LA LIGNE C'EST LE CORPS !
-		 */
-        while (!(line = readLineCRLF()).isEmpty()) {
-            String[] strings = line.split(":");
-            fields.merge(
-                    strings[0],
-                    Arrays.stream(strings).skip(1).collect(Collectors.joining(":")),
-                    (x, y) -> x + ";" + y);
-        }
-
-        return HTTPHeader.create(response, fields);
-    }
+    HTTPHeader readHeader () throws IOException;
 
     /**
      * @param size

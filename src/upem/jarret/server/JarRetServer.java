@@ -2,6 +2,8 @@ package upem.jarret.server;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import upem.jarret.client.HTTPHeader;
+import upem.jarret.client.HTTPHeaderFromClient;
+import upem.jarret.client.HTTPHeaderFromServer;
 import upem.jarret.client.HTTPReader;
 
 import java.io.IOException;
@@ -23,24 +25,25 @@ public class JarRetServer {
         SHUTDOWN, STOP, FLUSH, SHOW
     }
 
-    static class Context {
+    private static final Charset CHARSET_ASCII = Charset.forName("ASCII");
+
+    enum State {
+        CONNECTION, TASK, RESPONSE, END
+    }
+
+    class Context {
         private boolean inputClosed = false;
         private final ByteBuffer buffer = ByteBuffer.allocate(BUF_SIZE);
         private final SelectionKey key;
         private final SocketChannel sc;
         private JobMonitor jobMonitor = null;
         private StringBuilder response = new StringBuilder();
-        private static final Charset CHARSET_ASCII = Charset.forName("ASCII");
 
         private State state;
         private StringBuilder stringBuilder = new StringBuilder();
 
         private HTTPReader reader;
         private final ArrayList<String> stringList = new ArrayList<>();
-
-        enum State {
-            CONNECTION, TASK, RESPONSE, END
-        }
 
         public Context(SelectionKey key) {
             this.key = key;
@@ -58,6 +61,8 @@ public class JarRetServer {
 
             if (read == 0)
                 return;
+
+            System.out.println(read);
 
             analyzeAnswer();
         }
@@ -79,7 +84,8 @@ public class JarRetServer {
                         break;
                     case END:
                         // TODO : End ?
-                        sc.close();
+                        buffer.clear();
+                        state = State.CONNECTION;
                         break;
                     default:
                         throw new IllegalStateException("Impossible state in write mode: " + state.toString());
@@ -90,12 +96,14 @@ public class JarRetServer {
         }
 
         private void analyzeAnswer() throws IOException {
+            ByteBuffer duplicate = buffer.duplicate();
+            duplicate.flip();
+            System.out.println(CHARSET_ASCII.decode(duplicate).toString());
+
             HTTPReader reader = HTTPReader.useStringReader(buffer);
             HTTPHeader header = reader.readHeader();
 
-            ObjectMapper mapper = new ObjectMapper();
-            HashMap<String, Object> map = mapper.readValue(reader.readBytes(header.getContentLength()).flip().toString(), HashMap.class);
-
+            System.out.println("TEST CONNECTION");
             switch (state) {
                 case CONNECTION:
                     System.out.println("CONNECTION");
@@ -108,6 +116,9 @@ public class JarRetServer {
                         // TODO : Comeback
                         System.out.println("TASK");
                         Charset contentCharset = (header.getCharset() != null) ? header.getCharset() : CHARSET_ASCII;
+
+                        jobMonitor = jobList.get(0);
+
                         String task = jobMonitor.sendTask();
                         buffer.put(CHARSET_ASCII.encode(ok()));
                         buffer.put(CHARSET_ASCII.encode("Content-Type: application/json; charset=utf-8\r\n"
@@ -119,6 +130,9 @@ public class JarRetServer {
                     }
                     break;
                 case RESPONSE:
+                    ObjectMapper mapper = new ObjectMapper();
+                    HashMap<String, Object> map = mapper.readValue(reader.readBytes(header.getContentLength()).flip().toString(), HashMap.class);
+
                     System.out.println("RESPONSE");
                     Object answer = map.get("Answer");
 
@@ -249,6 +263,7 @@ public class JarRetServer {
                     cntxt.doRead();
                 }
             } catch (IOException e) {
+                e.printStackTrace();
                 silentlyClose(key.channel());
             }
         }
@@ -266,8 +281,10 @@ public class JarRetServer {
             return;
         try {
             sc.close();
+            throw new IOException();
         } catch (IOException e) {
-            // silently ignore
+            // Do nothing
+            e.printStackTrace();
         }
     }
 

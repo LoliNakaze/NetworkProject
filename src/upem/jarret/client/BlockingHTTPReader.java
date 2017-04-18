@@ -5,6 +5,10 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.Charset;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 public class BlockingHTTPReader implements HTTPReader {
     private final Charset ASCII_CHARSET = Charset.forName("ASCII");
@@ -14,6 +18,29 @@ public class BlockingHTTPReader implements HTTPReader {
     BlockingHTTPReader(SocketChannel sc, ByteBuffer buff) {
         this.sc = sc;
         this.buff = buff;
+    }
+
+    public HTTPHeader readHeader() throws IOException {
+        String response = readLineCRLF();
+        Map<String, String> fields = new HashMap<>();
+        String line;
+
+        System.out.println(response);
+
+		/*
+         * On continue tant que l'on ne trouve pas LA FAMEUSE LIGNE VIDE !!!
+		 * APRES LA LIGNE C'EST LE CORPS !
+		 */
+        while (!(line = readLineCRLF()).isEmpty()) {
+            System.out.println(line);
+            String[] strings = line.split(":");
+            fields.merge(
+                    strings[0],
+                    Arrays.stream(strings).skip(1).collect(Collectors.joining(":")),
+                    (x, y) -> x + ";" + y);
+        }
+
+        return HTTPHeaderFromServer.create(response, fields);
     }
 
     @Override
@@ -29,6 +56,7 @@ public class BlockingHTTPReader implements HTTPReader {
                 buff.flip();
                 sb.append(ASCII_CHARSET.decode(buff));
                 buff.clear();
+//                sc.read(buff);
                 if (-1 == sc.read(buff)) {
                     throw new HTTPException();
                 }

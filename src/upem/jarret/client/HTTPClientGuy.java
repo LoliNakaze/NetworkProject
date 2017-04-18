@@ -6,8 +6,6 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.Charset;
 
-import sun.net.www.http.HttpClient;
-
 /**
  * Created by nakaze on 23/03/17.
  */

@@ -179,13 +179,16 @@ public class JarRetClient {
 	
 	
 	public static void main(String[] args) throws IOException, InterruptedException {
-		String host = "ns3001004.ip-5-196-73.eu";
-		int port = 8080;
+/*		String host = "ns3001004.ip-5-196-73.eu";
+		int port = 8080;*/
+		String host = "localhost";
+		int port = 7777;
+
 		SocketChannel sc = null;
 		try {
 			sc = SocketChannel.open(new InetSocketAddress(host, port));
 		} catch (IOException e) {
-			System.err.println("La connexion a echoué");
+			System.err.println("La connexion a echouï¿½");
 			e.printStackTrace();
 		}
 		JarRetClient jarRetClient = new JarRetClient();
