@@ -29,7 +29,6 @@ public interface HTTPReader {
 		 */
         while (!(line = readLineCRLF()).isEmpty()) {
             String[] strings = line.split(":");
-
             fields.merge(
                     strings[0],
                     Arrays.stream(strings).skip(1).collect(Collectors.joining(":")),
@@ -66,4 +65,8 @@ public interface HTTPReader {
     static HTTPReader useStringReader(ByteBuffer buffer) {
         return new StringReader(buffer);
     }
+
+/*    static HTTPReader useNonBlockingReader(SocketChannel sc, ByteBuffer buff) {
+        return new NonBlockingHTTPReader(sc, buff);
+    }*/
 }
