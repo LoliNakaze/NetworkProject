@@ -1,2 +1,5 @@
 0:{Prime=false}
 1:{Prime=false}
+2:{Prime=true}
+3:{Prime=true}
+4:{Prime=false, Facteur=2}

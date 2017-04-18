@@ -68,13 +68,10 @@ public class JarRetServer {
         }
 
         public void doWrite() throws IOException {
-            //         System.out.println(buffer);
             buffer.flip();
-            //       System.out.println(buffer);
 
             System.out.println(buffer);
             if (sc.write(buffer) == 0) {
-                System.out.println(buffer);
                 buffer.compact();
                 return;
             }
@@ -120,8 +117,9 @@ public class JarRetServer {
                         state = State.END;
                     } else {
                         // TODO : Comeback --- OK
-                        if (!jobList.stream().filter(JobMonitor::isComplete).findAny().isPresent()) {
+                        if (!jobList.stream().filter(j -> !(j.isComplete())).findAny().isPresent()) {
                             buffer.put(CHARSET_ASCII.encode(comeback()));
+                            System.out.println("Comback");
                             state = State.END;
                             break;
                         }
@@ -346,9 +344,12 @@ public class JarRetServer {
             usage();
             return;
         }
+
         JarRetServer server = new JarRetServer(Integer.parseInt(args[0]), Paths.get(args[1]));
+        System.out.println("Server listening on port " + args[0]);
 //        JarRetServer server = new JarRetServer(7777, Paths.get("resources/JarRetJobs.json"));
         server.launch();
+        server.closeAllMonitors();
     }
 
     private String interestOpsToString(SelectionKey key) {
