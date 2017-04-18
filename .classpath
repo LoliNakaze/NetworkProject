@@ -4,5 +4,8 @@
 	<classpathentry kind="src" path="src"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.USER_LIBRARY/WorkerPrimeV1"/>
 	<classpathentry kind="lib" path="C:/Users/ne-il/workspace/NetworkProject/libs/jackson-all-1.9.0.jar"/>
+	<classpathentry kind="lib" path="C:/Users/ne-il/workspace/NetworkProject/libs/jackson-annotations-2.8.0.jar"/>
+	<classpathentry kind="lib" path="C:/Users/ne-il/workspace/NetworkProject/libs/jackson-core-2.8.1.jar"/>
+	<classpathentry kind="lib" path="C:/Users/ne-il/workspace/NetworkProject/libs/jackson-databind-2.8.7.jar"/>
 	<classpathentry kind="output" path="out/production/NetworkProject"/>
 </classpath>
