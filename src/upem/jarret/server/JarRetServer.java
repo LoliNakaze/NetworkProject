@@ -11,8 +11,10 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.nio.charset.Charset;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
 
@@ -30,7 +32,7 @@ public class JarRetServer {
         CONNECTION, TASK, RESPONSE, END
     }
 
-    class Context {
+    static class Context {
         private boolean inputClosed = false;
         private final ByteBuffer buffer = ByteBuffer.allocate(BUF_SIZE);
         private final SelectionKey key;
@@ -180,13 +182,14 @@ public class JarRetServer {
         }
 
         private String comeback() {
+            String body = "{"
+                    + "\"ComeBackInSeconds\" : " + configuration.comeback
+                    + "}";
             return ok()
                     + "Content-Type: application/json; charset=utf-8\r\n"
-                    + "Content-Length: 199\r\n"
+                    + "Content-Length: " + body.length() + "\r\n"
                     + "\r\n"
-                    + "{"
-                    + "\"ComeBackInSeconds\" : 300"
-                    + "}";
+                    + body;
         }
 
         private JobMonitor randPriorityMonitor() {
@@ -202,26 +205,60 @@ public class JarRetServer {
         }
     }
 
+    static class Configuration {
+        int port;
+        String logPath;
+        String answerPath;
+        int maxSize;
+        int comeback;
+
+        Configuration(int port, String logPath, String answerPath, int maxSize, int comeback) {
+            this.port = port;
+            this.logPath = logPath;
+            this.answerPath = answerPath;
+            this.maxSize = maxSize;
+            this.comeback = comeback;
+        }
+
+        static Configuration fromFile(Path path) throws IOException {
+            ObjectMapper mapper = new ObjectMapper();
+            Map<String, Object> map = mapper.readValue(Files.newInputStream(path, StandardOpenOption.READ), HashMap.class);
+
+            int port = (map.get("port") == null) ? 7777 : Integer.parseInt((String) map.get("port"));
+            String logPath = (map.get("logPath") == null) ? "log" : (String) map.get("logPath");
+            String answerPath = (map.get("answerPath") == null) ? "answer" : (String) map.get("answerPath");
+            int maxSize = (map.get("maxSize") == null) ? Integer.MAX_VALUE : Integer.parseInt((String) map.get("maxSize"));
+            int comeback = (map.get("comeback") == null) ? 300 : Integer.parseInt((String) map.get("comeback"));
+
+            return new Configuration(port, logPath, answerPath, maxSize, comeback);
+        }
+
+        static Configuration defaultConfiguration() {
+            return new Configuration(7777, "log/", "answer/", Integer.MAX_VALUE, 300);
+        }
+    }
+
     private static final int BUF_SIZE = 4096;
     private final ServerSocketChannel serverSocketChannel;
     private final Selector selector;
     private final Set<SelectionKey> selectedKeys;
-    private final List<JobMonitor> jobList;
+    private static List<JobMonitor> jobList;
 
-    private final Random rand = new Random();
+    private static final Random rand = new Random();
     private final Thread listener = new Thread(() -> startCommandListener(System.in));
+    private static Configuration configuration;
 
     private final ArrayBlockingQueue<Command> commandQueue = new ArrayBlockingQueue<>(5);
     private Map<Command, Runnable> commandMap = new EnumMap<>(Command.class);
-    private final Object lock = new Object();
 
-    public JarRetServer(int port, Path path) throws IOException {
-        serverSocketChannel = ServerSocketChannel.open();
-        serverSocketChannel.bind(new InetSocketAddress(port));
+    public JarRetServer(Path jobPath, Path configPath) throws IOException {
+        configuration = (configPath != null) ? Configuration.fromFile(configPath) : Configuration.defaultConfiguration();
+
+        serverSocketChannel = ServerSocketChannel.open().bind(new InetSocketAddress(configuration.port));
         selector = Selector.open();
         selectedKeys = selector.selectedKeys();
 
-        jobList = JobMonitor.jobMonitorListFromFile(path);
+        jobList = JobMonitor.jobMonitorListFromFile(jobPath, configuration.answerPath);
 
         commandMap.put(Command.STOP, () -> silentlyClose(serverSocketChannel));
         commandMap.put(Command.FLUSH, () -> selector.keys().stream().filter(s -> !(s.channel() instanceof ServerSocketChannel)).forEach(k -> silentlyClose(k.channel())));
@@ -235,6 +272,7 @@ public class JarRetServer {
 
     /**
      * Launches the server.
+     *
      * @throws IOException
      */
     public void launch() throws IOException {
@@ -266,9 +304,7 @@ public class JarRetServer {
                     case "SHOW":
                     case "STOP":
                     case "FLUSH":
-                        synchronized (lock) {
-                            commandQueue.put(Command.valueOf(line));
-                        }
+                        commandQueue.put(Command.valueOf(line));
                         selector.wakeup();
                         break;
                     default:
@@ -329,16 +365,18 @@ public class JarRetServer {
     }
 
     private static void usage() {
-        System.out.println("ServerSumNew <listeningPort> <joblistPath>");
+        System.out.println("ServerSumNew <joblistPath> [configPath]");
     }
 
     public static void main(String[] args) throws NumberFormatException, IOException {
-        if (args.length != 2) {
+        if (args.length < 1 || args.length > 2) {
             usage();
             return;
         }
 
-        JarRetServer server = new JarRetServer(Integer.parseInt(args[0]), Paths.get(args[1]));
+        Path configPath = (args.length == 1) ? null : Paths.get(args[1]);
+        JarRetServer server = new JarRetServer(Paths.get(args[0]), configPath);
+
         System.out.println("Server listening on port " + args[0]);
 //        JarRetServer server = new JarRetServer(7777, Paths.get("resources/JarRetJobs.json"));
         server.launch();

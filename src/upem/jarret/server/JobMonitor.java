@@ -133,10 +133,10 @@ class JobMonitor implements Closeable {
     private final OutputStream out;
     private final BufferedWriter writer;
 
-    JobMonitor(Job job) throws IOException {
+    JobMonitor(Job job, String answerPath) throws IOException {
         this.job = job;
         jobPrioritySum += Integer.parseInt(job.getJobPriority());
-        path = Paths.get(job.getWorkerClassName() + "answers.txt");
+        path = Paths.get(answerPath + job.getWorkerClassName() + "answers.txt");
         bitSet = new BitSet(Integer.parseInt(job.getJobTaskNumber()));
         out = Files.newOutputStream(path, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
         writer = new BufferedWriter(new OutputStreamWriter(out));
@@ -159,10 +159,10 @@ class JobMonitor implements Closeable {
         return nextId;
     }
 
-    static List<JobMonitor> jobMonitorListFromFile(Path path) throws IOException {
+    static List<JobMonitor> jobMonitorListFromFile(Path path, String answerPath) throws IOException {
         return Job.joblistFromFile(path).stream().map(j -> {
             try {
-                return new JobMonitor(j);
+                return new JobMonitor(j, answerPath);
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
