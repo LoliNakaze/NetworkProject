@@ -217,19 +217,15 @@ public class JarRetClient {
     }
 
     public static void main(String[] args) throws IOException, InterruptedException {
-//		String host = "ns3001004.ip-5-196-73.eu";
-//		int port = 8080;
-//		String host = "localhost";
-//		int port = 7777;
-//        String clientId = "Neil";
+    	if (args.length != 3) {
+            usage();
+            return;
+        }
 
         String host = args[0];
         int port = Integer.valueOf(args[1]);
         String clientId = args[2];
-        if (args.length != 3) {
-            usage();
-            return;
-        }
+        
 
         SocketChannel sc = null;
         try {
