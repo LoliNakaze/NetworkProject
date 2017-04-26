@@ -222,15 +222,18 @@ public class JarRetServer {
 
         static Configuration fromFile(Path path) throws IOException {
             ObjectMapper mapper = new ObjectMapper();
-            Map<String, Object> map = mapper.readValue(Files.newInputStream(path, StandardOpenOption.READ), HashMap.class);
 
-            int port = (map.get("port") == null) ? 7777 : Integer.parseInt((String) map.get("port"));
-            String logPath = (map.get("logPath") == null) ? "log" : (String) map.get("logPath");
-            String answerPath = (map.get("answerPath") == null) ? "answer" : (String) map.get("answerPath");
-            int maxSize = (map.get("maxSize") == null) ? Integer.MAX_VALUE : Integer.parseInt((String) map.get("maxSize"));
-            int comeback = (map.get("comeback") == null) ? 300 : Integer.parseInt((String) map.get("comeback"));
+            try (InputStream in = Files.newInputStream(path, StandardOpenOption.READ)){
+                Map<String, Object> map = mapper.readValue(in, HashMap.class);
 
-            return new Configuration(port, logPath, answerPath, maxSize, comeback);
+                int port = (map.get("port") == null) ? 7777 : Integer.parseInt((String) map.get("port"));
+                String logPath = (map.get("logPath") == null) ? "log" : (String) map.get("logPath");
+                String answerPath = (map.get("answerPath") == null) ? "answer" : (String) map.get("answerPath");
+                int maxSize = (map.get("maxSize") == null) ? Integer.MAX_VALUE : Integer.parseInt((String) map.get("maxSize"));
+                int comeback = (map.get("comeback") == null) ? 300 : Integer.parseInt((String) map.get("comeback"));
+
+                return new Configuration(port, logPath, answerPath, maxSize, comeback);
+            }
         }
 
         static Configuration defaultConfiguration() {
