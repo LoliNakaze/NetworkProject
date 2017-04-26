@@ -213,7 +213,7 @@ public class JarRetClient {
     }
 
     private static void usage() {
-        System.out.println("Usage: JarRetClient <hostname> <port>");
+        System.out.println("Usage: JarRetClient <hostname> <port> <ClientId>");
     }
 
     public static void main(String[] args) throws IOException, InterruptedException {
@@ -221,10 +221,12 @@ public class JarRetClient {
 //		int port = 8080;
 //		String host = "localhost";
 //		int port = 7777;
+//        String clientId = "Neil";
+
         String host = args[0];
         int port = Integer.valueOf(args[1]);
-
-        if (args.length != 2) {
+        String clientId = args[2];
+        if (args.length != 3) {
             usage();
             return;
         }
@@ -253,7 +255,7 @@ public class JarRetClient {
 			/*We transform the Json from the server in a HashMap in ServerAnswer*/
             ServerAnswer serverAnswer = new ServerAnswer(
                     mapper.readValue(getHeader.getCharset().decode(contentJson).toString(), HashMap.class));
-            serverAnswer.putClientId("NEIL");
+            serverAnswer.putClientId(clientId);
 
 			/*Gestion de l'attente*/
             int waitSeconds = 0;
@@ -274,7 +276,7 @@ public class JarRetClient {
             buffToSend.flip();
             sc.write(buffToSend);
 
-            System.out.println("The worker " + serverAnswer.getWorkerClassName() + " finished its job.");
+            System.out.println("The worker " + serverAnswer.getWorkerClassName() + " finished its task.");
             readServerAnswerAfterPost(sc);
         }
 

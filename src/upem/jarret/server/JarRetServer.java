@@ -138,9 +138,9 @@ public class JarRetServer {
                     if (charset == null)
                         charset = Charset.forName("UTF-8");
 
-                    String string = charset.decode(buffer).toString();
+                    String bodyJson = charset.decode(buffer).toString();
 
-                    HashMap<String, Object> map = mapper.readValue(string, HashMap.class);
+                    HashMap<String, Object> map = mapper.readValue(bodyJson, HashMap.class);
 
                     buffer.clear();
                     Object answer = map.get("Answer");
