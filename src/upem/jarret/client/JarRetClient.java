@@ -50,12 +50,7 @@ public class JarRetClient {
 	 */
 	private static void readServerAnswerAfterPost(SocketChannel sc) throws IOException {
 		ByteBuffer bu = ByteBuffer.allocate(1024);
-		try {
-			sc.read(bu);
-		} catch (IOException e) {
-			System.out.println("FOIRAGE DANS LE ReadAnswerAfterPost PARCEQUE LE SERVEUR A DECO");
-			return;
-		}
+		sc.read(bu);
 
 		bu.flip();
 		System.out.println("Server answer to client's POST request: \n" + ASCII.decode(bu).toString());
@@ -243,24 +238,20 @@ public class JarRetClient {
 	}
 
 	public static void main(String[] args) throws IOException, InterruptedException {
-		// if (args.length != 3) {
-		// usage();
-		// return;
-		// }
-		//
-		// String host = args[0];
-		// int port = Integer.valueOf(args[1]);
-		// String clientId = args[2];
+		if (args.length != 3) {
+			usage();
+			return;
+		}
 
-		String host = "localhost";
-		int port = 7777;
-		String clientId = "Neil";
+		String host = args[0];
+		int port = Integer.valueOf(args[1]);
+		String clientId = args[2];
 
 		JarRetClient jarRetClient = new JarRetClient();
 		while (!Thread.interrupted()) {
 			try (SocketChannel sc = SocketChannel.open()) {
 				sc.connect(new InetSocketAddress(host, port));
-				
+
 				/*-------BOUCLE PRINCIPALE--------*/
 				while (!Thread.interrupted()) {
 
@@ -307,9 +298,9 @@ public class JarRetClient {
 				}
 			} catch (IOException e) {
 				long wait = 4000;
-				System.out.println("Connection lost with the server, reconnection attempt in: " + wait/1000 + " s");
+				System.out.println("Connection lost with the server, reconnection attempt in: " + wait / 1000 + " s");
 				Thread.sleep(wait);
-			} 
+			}
 		}
 
 	}

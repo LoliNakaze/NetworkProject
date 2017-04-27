@@ -1,6 +1,7 @@
 package upem.jarret.server;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import upem.jarret.http.HTTPException;
 import upem.jarret.http.HTTPHeader;
 import upem.jarret.http.HTTPReader;
 
@@ -22,448 +23,491 @@ import java.util.concurrent.ArrayBlockingQueue;
  * Created by nakaze on 15/04/17.
  */
 public class JarRetServer {
-	private enum Command {
-		SHUTDOWN_NOW, SHUTDOWN, INFO, FLUSH
-	}
 
-	private static final Charset CHARSET_ASCII = Charset.forName("ASCII");
+    private enum Command {
+        SHUTDOWN_NOW, SHUTDOWN, INFO, FLUSH
+    }
 
-	private enum State {
-		CONNECTION, TASK, RESPONSE, END
-	}
+    private static final Charset CHARSET_ASCII = Charset.forName("ASCII");
 
-	static class Context {
-		private boolean inputClosed = false;
-		private final ByteBuffer buffer = ByteBuffer.allocate(BUF_SIZE);
-		private final SelectionKey key;
-		private final SocketChannel sc;
-		private JobMonitor jobMonitor = null;
+    private enum State {
+        CONNECTION, TASK, RESPONSE, END
+    }
 
-		private State state;
+    private enum ReadState {
+        HEADER, CONTENT
+    }
 
-		public Context(SelectionKey key) {
-			this.key = key;
-			this.sc = (SocketChannel) key.channel();
-			state = State.CONNECTION;
-		}
+    static class Context {
+        private final ByteBuffer buffer = ByteBuffer.allocate(BUF_SIZE);
+        private final SelectionKey key;
+        private final SocketChannel sc;
+        private JobMonitor jobMonitor = null;
 
-		void doRead() throws IOException {
-			int read;
+        private ReadState readState;
+        private State state;
 
-			if ((read = sc.read(buffer)) == -1) {
-				inputClosed = true;
-			}
+        private byte[] last = new byte[4];
+        private HTTPHeader header;
+        private HTTPReader reader;
 
-			// TODO
+        public Context(SelectionKey key) {
+            this.key = key;
+            this.sc = (SocketChannel) key.channel();
+            state = State.CONNECTION;
+            readState = ReadState.HEADER;
+            reader = HTTPReader.useStringReader(buffer);
+        }
 
-			if (read == 0)
-				return;
+        private void bufferShift() {
+            last[0] = last[1];
+            last[1] = last[2];
+            last[2] = last[3];
+        }
 
-			analyzeAnswer();
-		}
+        private void clearBuffer() {
+            last[0] = last[1] = last[2] = last[3] = 0;
+        }
 
-		void doWrite() throws IOException {
-			buffer.flip();
+        private boolean isEndHeader() {
+            if (last[0] == '\r' && last[1] == '\n' && last[2] == '\r' && last[3] == '\n')
+                return true;
+            return false;
+        }
 
-			if (sc.write(buffer) == 0) {
-				buffer.compact();
-				return;
-			}
+        void doRead() throws IOException {
+            int read;
+            int position = buffer.position();
 
-			buffer.compact();
+            if ((read = sc.read(buffer)) == -1 || read == 0)
+                return;
 
-			if (buffer.position() == 0) {
-				buffer.clear();
-				switch (state) {
-				case TASK:
-					state = State.RESPONSE;
-					break;
-				case END:
-					buffer.clear();
-					// System.out.println("END");
-					state = State.CONNECTION;
-					break;
-				default:
-					throw new IllegalStateException("Impossible state in write mode: " + state.toString());
-				}
+//            System.out.println(state + " " + readState);
+            switch (readState) {
+                case HEADER:
+                    ByteBuffer tmp = buffer.duplicate();
+                    tmp.position(position);
 
-				key.interestOps(SelectionKey.OP_READ);
-			}
-		}
+                    while (buffer.hasRemaining()) {
+                        bufferShift();
+                        last[3] = tmp.get();
+                        if (isEndHeader()) {
+                            header = reader.readHeader();
 
-		private void analyzeAnswer() throws IOException {
-			// printBuffer(buffer);
+                            if (analyzeIf(-1 == header.getContentLength()))
+                                break;
 
-			HTTPReader reader = HTTPReader.useStringReader(buffer);
-			HTTPHeader header = reader.readHeader();
+                            if (analyzeIf(buffer.position() >= header.getContentLength())) {
+                                readState = ReadState.CONTENT;
+                                break;
+                            }
 
-			switch (state) {
-			case CONNECTION:
-				buffer.clear();
-				String[] split = header.getResponse().split(" ");
-				if (!(split[0].equals("GET") && split[1].equals("Task"))) {
-					buffer.put(CHARSET_ASCII.encode(badRequest()));
-					state = State.END;
-				} else {
-					if (!jobList.stream().filter(j -> !(j.isComplete())).findAny().isPresent()) {
-						buffer.put(CHARSET_ASCII.encode(comeback()));
-						System.out.println("Comeback");
-						state = State.END;
-						break;
-					}
-					Charset contentCharset = (header.getCharset() != null) ? header.getCharset()
-							: Charset.forName("UTF-8");
+                            buffer.limit(buffer.capacity());
+                        }
+                    }
 
-					jobMonitor = randPriorityMonitor();
+                    break;
+                case CONTENT:
+                    analyzeIf(buffer.position() >= header.getContentLength());
+                    header = null;
+                    break;
+            }
+        }
 
-					String task = jobMonitor.sendTask();
-					buffer.put(CHARSET_ASCII.encode(ok()));
-					buffer.put(CHARSET_ASCII.encode("Content-Type: application/json; charset=utf-8\r\n"
-							+ "Content-Length: " + task.length() + "\r\n" + "\r\n"));
-					buffer.put(contentCharset.encode(task));
+        private boolean analyzeIf(boolean b) throws IOException {
+            if (b) {
+                analyzeAnswer();
+                clearBuffer();
+            }
 
-					state = State.TASK;
-				}
-				break;
-			case RESPONSE:
-				ObjectMapper mapper = new ObjectMapper();
-				ByteBuffer tmp = reader.readBytes(header.getContentLength());
-				buffer.clear();
-				tmp.flip();
-				buffer.put(tmp);
-				buffer.flip();
-				long jobId = buffer.getLong();
-				int taskId = buffer.getInt();
+            return b;
+        }
 
-				Charset charset = header.getCharset();
+        void doWrite() throws IOException {
+            buffer.flip();
 
-				if (charset == null)
-					charset = Charset.forName("UTF-8");
+            if (sc.write(buffer) == 0) {
+                buffer.compact();
+                return;
+            }
 
-				String bodyJson = charset.decode(buffer).toString();
+            buffer.compact();
 
-				HashMap<String, Object> map = mapper.readValue(bodyJson, HashMap.class);
+            if (buffer.position() == 0) {
+                buffer.clear();
+                switch (state) {
+                    case TASK:
+                        state = State.RESPONSE;
+                        break;
+                    case END:
+                        state = State.CONNECTION;
+                        break;
+                    default:
+                        throw new IllegalStateException("Impossible state in write mode: " + state.toString());
+                }
 
-				buffer.clear();
-				Object answer = map.get("Answer");
+                readState = ReadState.HEADER;
+                key.interestOps(SelectionKey.OP_READ);
+            }
+        }
 
-				if (answer == null) {
-					Object error = map.get("Error");
+        private void analyzeAnswer() throws IOException {
+//            printBuffer(buffer);
 
-					if (error == null) {
-						buffer.put(CHARSET_ASCII.encode(badRequest()));
-					} else {
-						// TODO : A demander : est-ce qu'une erreur dans une
-						// task fait que la task est exécutée ?
-						buffer.put(CHARSET_ASCII.encode(ok()));
-					}
-				} else {
-					jobMonitor.updateATask(Integer.parseInt((String) map.get("Task")), answer.toString());
-					buffer.put(CHARSET_ASCII.encode(ok()));
-				}
-				state = State.END;
-				break;
-			}
+            switch (state) {
+                case CONNECTION:
+                    buffer.clear();
+                    String[] split = header.getResponse().split(" ");
+                    if (!(split[0].equals("GET") && split[1].equals("Task"))) {
+                        buffer.put(CHARSET_ASCII.encode(badRequest()));
+                        state = State.END;
+                    } else {
+                        if (!jobList.stream().filter(j -> !(j.isComplete())).findAny().isPresent()) {
+                            buffer.put(CHARSET_ASCII.encode(comeback()));
+                            System.out.println("Comeback");
+                            state = State.END;
+                            break;
+                        }
+                        Charset contentCharset = (header.getCharset() != null) ? header.getCharset() : Charset.forName("UTF-8");
 
-			key.interestOps(SelectionKey.OP_WRITE);
-		}
+                        jobMonitor = randPriorityMonitor();
 
-		private void printBuffer(ByteBuffer buffer) {
-			ByteBuffer duplicate = buffer.duplicate();
-			duplicate.flip();
-			System.out.println(CHARSET_ASCII.decode(duplicate).toString());
-		}
+                        String task = jobMonitor.sendTask();
+                        buffer.put(CHARSET_ASCII.encode(ok()));
+                        buffer.put(CHARSET_ASCII.encode("Content-Type: application/json; charset=utf-8\r\n"
+                                + "Content-Length: " + task.length() + "\r\n"
+                                + "\r\n"));
+                        buffer.put(contentCharset.encode(task));
 
-		private String badRequest() {
-			return "HTTP/1.1 400 Bad Request\r\n";
-		}
+                        state = State.TASK;
+                    }
+                    break;
+                case RESPONSE:
+                    ObjectMapper mapper = new ObjectMapper();
+                    ByteBuffer tmp = reader.readBytes(header.getContentLength());
+                    buffer.clear();
+                    tmp.flip();
+                    buffer.put(tmp);
+                    buffer.flip();
+                    long jobId = buffer.getLong();
+                    int taskId = buffer.getInt();
 
-		private String ok() {
-			return "HTTP/1.1 200 OK\r\n";
-		}
+                    Charset charset = header.getCharset();
 
-		private String comeback() {
-			String body = "{" + "\"ComeBackInSeconds\" : " + configuration.comeback + "}";
-			return ok() + "Content-Type: application/json; charset=utf-8\r\n" + "Content-Length: " + body.length()
-					+ "\r\n" + "\r\n" + body;
-		}
+                    if (charset == null)
+                        charset = Charset.forName("UTF-8");
 
-		private JobMonitor randPriorityMonitor() {
-			int randInt = rand.nextInt() % JobMonitor.getPrioritySum();
+                    String bodyJson = charset.decode(buffer).toString();
 
-			for (int i = 0, j = 0; i < jobList.size(); i++) {
-				j += jobList.get(i).getJobPriority();
-				if (j >= randInt)
-					return jobList.get(i);
-			}
+                    HashMap<String, Object> map = mapper.readValue(bodyJson, HashMap.class);
 
-			throw new IllegalStateException("Impossible state normally");
-		}
-	}
+                    buffer.clear();
+                    Object answer = map.get("Answer");
 
-	static class Configuration {
-		int port;
-		String logPath;
-		String answerPath;
-		int maxSize;
-		int comeback;
+                    if (answer == null) {
+                        Object error = map.get("Error");
 
-		Configuration(int port, String logPath, String answerPath, int maxSize, int comeback) {
-			this.port = port;
-			this.logPath = logPath;
-			this.answerPath = answerPath;
-			this.maxSize = maxSize;
-			this.comeback = comeback;
-		}
+                        if (error == null) {
+                            buffer.put(CHARSET_ASCII.encode(badRequest()));
+                        } else {
+                            // TODO : A demander : est-ce qu'une erreur dans une task fait que la task est exécutée ?
+                            jobMonitor.updateATask(Integer.parseInt((String) map.get("Task")), error.toString());
+                            buffer.put(CHARSET_ASCII.encode(ok()));
+                        }
+                    } else {
+                        jobMonitor.updateATask(Integer.parseInt((String) map.get("Task")), answer.toString());
+                        buffer.put(CHARSET_ASCII.encode(ok()));
+                    }
+                    state = State.END;
+                    break;
+            }
 
-		static Configuration fromFile(Path path) throws IOException {
-			ObjectMapper mapper = new ObjectMapper();
+            key.interestOps(SelectionKey.OP_WRITE);
+        }
 
-			try (InputStream in = Files.newInputStream(path, StandardOpenOption.READ)) {
-				Map<String, Object> map = mapper.readValue(in, HashMap.class);
+        private void printBuffer(ByteBuffer buffer) {
+            ByteBuffer duplicate = buffer.duplicate();
+            duplicate.flip();
+            System.out.println(CHARSET_ASCII.decode(duplicate).toString());
+        }
 
-				int port = (map.get("port") == null) ? 7777 : Integer.parseInt((String) map.get("port"));
-				String logPath = (map.get("logPath") == null) ? "log" : (String) map.get("logPath");
-				String answerPath = (map.get("answerPath") == null) ? "answer" : (String) map.get("answerPath");
-				int maxSize = (map.get("maxSize") == null) ? Integer.MAX_VALUE
-						: Integer.parseInt((String) map.get("maxSize"));
-				int comeback = (map.get("comeback") == null) ? 300 : Integer.parseInt((String) map.get("comeback"));
+        private String badRequest() {
+            return "HTTP/1.1 400 Bad Request\r\n";
+        }
 
-				return new Configuration(port, logPath, answerPath, maxSize, comeback);
-			}
-		}
+        private String ok() {
+            return "HTTP/1.1 200 OK\r\n";
+        }
 
-		static Configuration defaultConfiguration() {
-			return new Configuration(7777, "log/", "answer/", Integer.MAX_VALUE, 300);
-		}
-	}
+        private String comeback() {
+            String body = "{"
+                    + "\"ComeBackInSeconds\" : " + configuration.comeback
+                    + "}";
+            return ok()
+                    + "Content-Type: application/json; charset=utf-8\r\n"
+                    + "Content-Length: " + body.length() + "\r\n"
+                    + "\r\n"
+                    + body;
+        }
 
-	private static final int BUF_SIZE = 4096;
-	private final ServerSocketChannel serverSocketChannel;
-	private final Selector selector;
-	private final Set<SelectionKey> selectedKeys;
-	private static List<JobMonitor> jobList;
+        private JobMonitor randPriorityMonitor() {
+            int randInt = rand.nextInt() % JobMonitor.getPrioritySum();
 
-	private static final Random rand = new Random();
-	private final Thread listener = new Thread(() -> startCommandListener(System.in));
-	private static Configuration configuration;
+            for (int i = 0, j = 0; i < jobList.size(); i++) {
+                j += jobList.get(i).getJobPriority();
+                if (j >= randInt)
+                    return jobList.get(i);
+            }
 
-	private final ArrayBlockingQueue<Command> commandQueue = new ArrayBlockingQueue<>(5);
-	private Map<Command, Runnable> commandMap = new EnumMap<>(Command.class);
+            throw new IllegalStateException("Impossible state normally");
+        }
+    }
 
-	public JarRetServer(Path jobPath, Path configPath) throws IOException {
-		configuration = (configPath != null) ? Configuration.fromFile(configPath)
-				: Configuration.defaultConfiguration();
+    static class Configuration {
+        int port;
+        String logPath;
+        String answerPath;
+        int maxSize;
+        int comeback;
 
-		serverSocketChannel = ServerSocketChannel.open().bind(new InetSocketAddress(configuration.port));
-		selector = Selector.open();
-		selectedKeys = selector.selectedKeys();
+        Configuration(int port, String logPath, String answerPath, int maxSize, int comeback) {
+            this.port = port;
+            this.logPath = logPath;
+            this.answerPath = answerPath;
+            this.maxSize = maxSize;
+            this.comeback = comeback;
+        }
 
-		jobList = JobMonitor.jobMonitorListFromFile(jobPath, configuration.answerPath);
+        static Configuration fromFile(Path path) throws IOException {
+            ObjectMapper mapper = new ObjectMapper();
 
-		commandMap.put(Command.SHUTDOWN, () -> silentlyClose(serverSocketChannel));
-		commandMap.put(Command.SHUTDOWN_NOW, () -> {
-			listener.interrupt();
-			closeAllMonitors();
-			Thread.currentThread().interrupt();
-		});
-		commandMap.put(Command.INFO, this::printKeys);
-		commandMap.put(Command.FLUSH, () -> selector.keys().stream()
+            try (InputStream in = Files.newInputStream(path, StandardOpenOption.READ)) {
+                Map<String, Object> map = mapper.readValue(in, HashMap.class);
+
+                int port = (map.get("port") == null) ? 7777 : Integer.parseInt((String) map.get("port"));
+                String logPath = (map.get("logPath") == null) ? "log" : (String) map.get("logPath");
+                String answerPath = (map.get("answerPath") == null) ? "answer" : (String) map.get("answerPath");
+                int maxSize = (map.get("maxSize") == null) ? Integer.MAX_VALUE : Integer.parseInt((String) map.get("maxSize"));
+                int comeback = (map.get("comeback") == null) ? 300 : Integer.parseInt((String) map.get("comeback"));
+
+                return new Configuration(port, logPath, answerPath, maxSize, comeback);
+            }
+        }
+
+        static Configuration defaultConfiguration() {
+            return new Configuration(7777, "log/", "answer/", Integer.MAX_VALUE, 300);
+        }
+    }
+
+    private static final int BUF_SIZE = 4096;
+    private final ServerSocketChannel serverSocketChannel;
+    private final Selector selector;
+    private final Set<SelectionKey> selectedKeys;
+    private static List<JobMonitor> jobList;
+
+    private static final Random rand = new Random();
+    private final Thread listener = new Thread(() -> startCommandListener(System.in));
+    private static Configuration configuration;
+
+    private final ArrayBlockingQueue<Command> commandQueue = new ArrayBlockingQueue<>(5);
+    private Map<Command, Runnable> commandMap = new EnumMap<>(Command.class);
+
+    public JarRetServer(Path jobPath, Path configPath) throws IOException {
+        configuration = (configPath != null) ? Configuration.fromFile(configPath) : Configuration.defaultConfiguration();
+
+        serverSocketChannel = ServerSocketChannel.open().bind(new InetSocketAddress(configuration.port));
+        selector = Selector.open();
+        selectedKeys = selector.selectedKeys();
+
+        jobList = JobMonitor.jobMonitorListFromFile(jobPath, configuration.answerPath);
+
+        commandMap.put(Command.SHUTDOWN, () -> silentlyClose(serverSocketChannel));
+        commandMap.put(Command.SHUTDOWN_NOW, () -> {
+            listener.interrupt();
+            closeAllMonitors();
+            Thread.currentThread().interrupt();
+        });
+        commandMap.put(Command.INFO, this::printKeys);
+        commandMap.put(Command.FLUSH, () -> selector.keys().stream()
 				.filter(s -> !(s.channel() instanceof ServerSocketChannel)).forEach(k -> silentlyClose(k.channel())));
-	}
+    }
 
-	/**
-	 * Launches the server.
-	 *
-	 * @throws IOException
-	 */
-	public void launch() throws IOException {
-		listener.start();
+    /**
+     * Launches the server.
+     *
+     * @throws IOException
+     */
+    public void launch() throws IOException {
+        listener.start();
 
-		serverSocketChannel.configureBlocking(false);
-		serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
-		Set<SelectionKey> selectedKeys = selector.selectedKeys();
-		while (!Thread.interrupted()) {
-			selector.select();
+        serverSocketChannel.configureBlocking(false);
+        serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
+        Set<SelectionKey> selectedKeys = selector.selectedKeys();
+        while (!Thread.interrupted()) {
+            selector.select();
 
-			Command command = commandQueue.poll();
-			if (command != null)
-				commandMap.get(command).run();
+            Command command = commandQueue.poll();
+            if (command != null) commandMap.get(command).run();
 
-			processSelectedKeys();
-			selectedKeys.clear();
-		}
-	}
+            processSelectedKeys();
+            selectedKeys.clear();
+        }
+    }
 
-	private void startCommandListener(InputStream in) {
-		try (Scanner scanner = new Scanner(in)) {
-			while (!Thread.interrupted() && scanner.hasNextLine()) {
-				String line = scanner.nextLine();
+    private void startCommandListener(InputStream in) {
+         try(Scanner scanner = new Scanner(in)) {
+            while (!Thread.interrupted() && scanner.hasNextLine()) {
+                String line = scanner.nextLine();
 
-				switch (line) {
-				case "SHUTDOWN_NOW":
-				case "INFO":
-				case "FLUSH":
-				case "SHUTDOWN":
-					commandQueue.put(Command.valueOf(line));
-					selector.wakeup();
-					break;
-				default:
-					System.err.println("Unknown command.");
-					break;
-				}
-			}
-		} catch (InterruptedException e) {
-			return;
-		}
-	}
+                switch (line) {
+                    case "SHUTDOWN_NOW":
+                    case "INFO":
+                    case "FLUSH":
+                    case "SHUTDOWN":
+                        commandQueue.put(Command.valueOf(line));
+                        selector.wakeup();
+                        break;
+                    default:
+                        System.err.println("Unknown command.");
+                        break;
+                }
+            }
+        } catch (InterruptedException e) {
+        	return;
+        }
+    }
 
-	private void processSelectedKeys() throws IOException {
-		for (SelectionKey key : selectedKeys) {
-			if (key.isValid() && key.isAcceptable()) {
-				doAccept(key);
-			}
-			try {
-				Context cntxt = (Context) key.attachment();
-				if (key.isValid() && key.isWritable()) {
-					cntxt.doWrite();
-				}
-				if (key.isValid() && key.isReadable()) {
-					cntxt.doRead();
-				}
-			} catch (IOException e) {
-				silentlyClose(key.channel());
-			}
-		}
-	}
+    private void processSelectedKeys() throws IOException {
+        for (SelectionKey key : selectedKeys) {
+            if (key.isValid() && key.isAcceptable()) {
+                doAccept(key);
+            }
+            try {
+                Context cntxt = (Context) key.attachment();
+                if (key.isValid() && key.isWritable()) {
+                    cntxt.doWrite();
+                }
+                if (key.isValid() && key.isReadable()) {
+                    cntxt.doRead();
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+                silentlyClose(key.channel());
+            }
+        }
+    }
 
-	private void doAccept(SelectionKey key) throws IOException {
-		SocketChannel sc = serverSocketChannel.accept();
-		sc.configureBlocking(false);
-		SelectionKey clientKey = sc.register(selector, SelectionKey.OP_READ);
-		clientKey.attach(new Context(clientKey));
-	}
+    private void doAccept(SelectionKey key) throws IOException {
+        SocketChannel sc = serverSocketChannel.accept();
+        sc.configureBlocking(false);
+        SelectionKey clientKey = sc.register(selector, SelectionKey.OP_READ);
+        clientKey.attach(new Context(clientKey));
+    }
 
-	private void closeAllMonitors() {
-		jobList.forEach(j -> {
-			try {
-				j.close();
-			} catch (IOException e) {
-				throw new UncheckedIOException(e);
-			}
-		});
-	}
+    private void closeAllMonitors() {
+        jobList.forEach(j -> {
+            try {
+                j.close();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        });
+    }
 
-	private static void silentlyClose(SelectableChannel sc) {
-		if (sc == null)
-			return;
-		try {
-			sc.close();
-			throw new IOException();
-		} catch (IOException e) {
-			// Do nothing
-		}
-	}
+    private static void silentlyClose(SelectableChannel sc) {
+        if (sc == null)
+            return;
+        try {
+            sc.close();
+            throw new IOException();
+        } catch (IOException e) {
+            // Do nothing
+        }
+    }
 
-	private static void usage() {
-		System.out.println("JarRetServer <joblistPath> [configPath]");
-	}
+    private static void usage() {
+        System.out.println("JarRetServer <joblistPath> [configPath]");
+    }
 
-	public static void main(String[] args) throws NumberFormatException, IOException {
-//		if (args.length < 1 || args.length > 2) {
-//			usage();
-//			return;
-//		}
-//
-//		Path configPath = (args.length == 1) ? null : Paths.get(args[1]);
-//		JarRetServer server = new JarRetServer(Paths.get(args[0]), configPath);
+    public static void main(String[] args) throws NumberFormatException, IOException {
+        if (args.length < 1 || args.length > 2) {
+            usage();
+            return;
+        }
 
-		
-		Path configPath =  null;
-		JarRetServer server = new JarRetServer(Paths.get("resources/JarRetJobs.json"), configPath);
-		
-//		System.out.println("Server listening on port " + args[0]);
-		
-		System.out.println("Server listening on port " + "7777");
-		
-		
-		// JarRetServer server = new JarRetServer(7777,
-		// Paths.get("resources/JarRetJobs.json"));
-		server.launch();
-		server.closeAllMonitors();
-	}
+        Path configPath = (args.length == 1) ? null : Paths.get(args[1]);
+        JarRetServer server = new JarRetServer(Paths.get(args[0]), configPath);
 
-	private String interestOpsToString(SelectionKey key) {
-		if (!key.isValid()) {
-			return "CANCELLED";
-		}
-		int interestOps = key.interestOps();
-		ArrayList<String> list = new ArrayList<>();
-		if ((interestOps & SelectionKey.OP_ACCEPT) != 0)
-			list.add("OP_ACCEPT");
-		if ((interestOps & SelectionKey.OP_READ) != 0)
-			list.add("OP_READ");
-		if ((interestOps & SelectionKey.OP_WRITE) != 0)
-			list.add("OP_WRITE");
-		return String.join("|", list);
-	}
+        System.out.println("Server listening on port " + server.configuration.port);
+//        JarRetServer server = new JarRetServer(7777, Paths.get("resources/JarRetJobs.json"));
+        server.launch();
+        server.closeAllMonitors();
+    }
 
-	public void printKeys() {
-		Set<SelectionKey> selectionKeySet = selector.keys();
-		if (selectionKeySet.isEmpty()) {
-			System.out.println("The selector contains no key : this should not happen!");
-			return;
-		}
-		System.out.println("The selector contains:");
-		for (SelectionKey key : selectionKeySet) {
-			SelectableChannel channel = key.channel();
-			if (channel instanceof ServerSocketChannel) {
-				System.out.println("\tKey for ServerSocketChannel : " + interestOpsToString(key));
-			} else {
-				SocketChannel sc = (SocketChannel) channel;
-				System.out.println("\tKey for Client " + remoteAddressToString(sc) + " : " + interestOpsToString(key));
-			}
-		}
-	}
+    private String interestOpsToString(SelectionKey key) {
+        if (!key.isValid()) {
+            return "CANCELLED";
+        }
+        int interestOps = key.interestOps();
+        ArrayList<String> list = new ArrayList<>();
+        if ((interestOps & SelectionKey.OP_ACCEPT) != 0) list.add("OP_ACCEPT");
+        if ((interestOps & SelectionKey.OP_READ) != 0) list.add("OP_READ");
+        if ((interestOps & SelectionKey.OP_WRITE) != 0) list.add("OP_WRITE");
+        return String.join("|", list);
+    }
 
-	private String remoteAddressToString(SocketChannel sc) {
-		try {
-			return sc.getRemoteAddress().toString();
-		} catch (IOException e) {
-			return "???";
-		}
-	}
+    public void printKeys() {
+        Set<SelectionKey> selectionKeySet = selector.keys();
+        if (selectionKeySet.isEmpty()) {
+            System.out.println("The selector contains no key : this should not happen!");
+            return;
+        }
+        System.out.println("The selector contains:");
+        for (SelectionKey key : selectionKeySet) {
+            SelectableChannel channel = key.channel();
+            if (channel instanceof ServerSocketChannel) {
+                System.out.println("\tKey for ServerSocketChannel : " + interestOpsToString(key));
+            } else {
+                SocketChannel sc = (SocketChannel) channel;
+                System.out.println("\tKey for Client " + remoteAddressToString(sc) + " : " + interestOpsToString(key));
+            }
+        }
+    }
 
-	private void printSelectedKey() {
-		if (selectedKeys.isEmpty()) {
-			System.out.println("There were not selected keys.");
-			return;
-		}
-		System.out.println("The selected keys are :");
-		for (SelectionKey key : selectedKeys) {
-			SelectableChannel channel = key.channel();
-			if (channel instanceof ServerSocketChannel) {
-				System.out.println("\tServerSocketChannel can perform : " + possibleActionsToString(key));
-			} else {
-				SocketChannel sc = (SocketChannel) channel;
-				System.out.println(
-						"\tClient " + remoteAddressToString(sc) + " can perform : " + possibleActionsToString(key));
-			}
+    private String remoteAddressToString(SocketChannel sc) {
+        try {
+            return sc.getRemoteAddress().toString();
+        } catch (IOException e) {
+            return "???";
+        }
+    }
 
-		}
-	}
+    private void printSelectedKey() {
+        if (selectedKeys.isEmpty()) {
+            System.out.println("There were not selected keys.");
+            return;
+        }
+        System.out.println("The selected keys are :");
+        for (SelectionKey key : selectedKeys) {
+            SelectableChannel channel = key.channel();
+            if (channel instanceof ServerSocketChannel) {
+                System.out.println("\tServerSocketChannel can perform : " + possibleActionsToString(key));
+            } else {
+                SocketChannel sc = (SocketChannel) channel;
+                System.out.println("\tClient " + remoteAddressToString(sc) + " can perform : " + possibleActionsToString(key));
+            }
 
-	private String possibleActionsToString(SelectionKey key) {
-		if (!key.isValid()) {
-			return "CANCELLED";
-		}
-		ArrayList<String> list = new ArrayList<>();
-		if (key.isAcceptable())
-			list.add("ACCEPT");
-		if (key.isReadable())
-			list.add("READ");
-		if (key.isWritable())
-			list.add("WRITE");
-		return String.join(" and ", list);
-	}
+        }
+    }
+
+    private String possibleActionsToString(SelectionKey key) {
+        if (!key.isValid()) {
+            return "CANCELLED";
+        }
+        ArrayList<String> list = new ArrayList<>();
+        if (key.isAcceptable()) list.add("ACCEPT");
+        if (key.isReadable()) list.add("READ");
+        if (key.isWritable()) list.add("WRITE");
+        return String.join(" and ", list);
+    }
 }
