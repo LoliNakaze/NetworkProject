@@ -1,0 +1,7 @@
+{
+	"port": "6666",
+	"logPath": "log/",
+	"answerPath": "answer/",
+	"maxSize": "1000000000",
+	"comeBack": "300"
+}

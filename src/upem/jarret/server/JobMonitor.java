@@ -139,8 +139,9 @@ class JobMonitor implements Closeable {
         this.job = job;
         jobPrioritySum += Integer.parseInt(job.getJobPriority());
         path = Paths.get(answerPath + job.getWorkerClassName() + "answers.txt");
+        path.toFile().getParentFile().mkdirs();
         bitSet = new BitSet(Integer.parseInt(job.getJobTaskNumber()));
-        out = Files.newOutputStream(path, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
+        out = Files.newOutputStream(path, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
         writer = new BufferedWriter(new OutputStreamWriter(out));
     }
 
