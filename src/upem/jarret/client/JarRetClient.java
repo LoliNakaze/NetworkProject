@@ -205,7 +205,7 @@ public class JarRetClient {
                     try {
                         return WorkerFactory.getWorker(serverAnswer.getWorkerURL(), serverAnswer.getWorkerClassName());
                     } catch (Exception e) {
-                        throw new IllegalArgumentException();
+                        throw new IllegalArgumentException(serverAnswer.getWorkerURL());
                     }
                 }
         );

@@ -1,6 +1,7 @@
 package upem.jarret.server;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import upem.jarret.http.HTTPException;
 import upem.jarret.http.HTTPHeader;
 import upem.jarret.http.HTTPReader;
 
@@ -32,34 +33,93 @@ public class JarRetServer {
         CONNECTION, TASK, RESPONSE, END
     }
 
+    private enum ReadState {
+        HEADER, CONTENT
+    }
+
     static class Context {
-        private boolean inputClosed = false;
         private final ByteBuffer buffer = ByteBuffer.allocate(BUF_SIZE);
         private final SelectionKey key;
         private final SocketChannel sc;
         private JobMonitor jobMonitor = null;
 
+        private ReadState readState;
         private State state;
+
+        private byte[] last = new byte[4];
+        private HTTPHeader header;
+        private HTTPReader reader;
 
         public Context(SelectionKey key) {
             this.key = key;
             this.sc = (SocketChannel) key.channel();
             state = State.CONNECTION;
+            readState = ReadState.HEADER;
+            reader = HTTPReader.useStringReader(buffer);
+        }
+
+        private void bufferShift() {
+            last[0] = last[1];
+            last[1] = last[2];
+            last[2] = last[3];
+        }
+
+        private void clearBuffer() {
+            last[0] = last[1] = last[2] = last[3] = 0;
+        }
+
+        private boolean isEndHeader() {
+            if (last[0] == '\r' && last[1] == '\n' && last[2] == '\r' && last[3] == '\n')
+                return true;
+            return false;
         }
 
         void doRead() throws IOException {
             int read;
+            int position = buffer.position();
 
-            if ((read = sc.read(buffer)) == -1) {
-                inputClosed = true;
-            }
-
-            // TODO
-
-            if (read == 0)
+            if ((read = sc.read(buffer)) == -1 || read == 0)
                 return;
 
-            analyzeAnswer();
+//            System.out.println(state + " " + readState);
+            switch (readState) {
+                case HEADER:
+                    ByteBuffer tmp = buffer.duplicate();
+                    tmp.position(position);
+
+                    while (buffer.hasRemaining()) {
+                        bufferShift();
+                        last[3] = tmp.get();
+                        if (isEndHeader()) {
+                            header = reader.readHeader();
+
+                            if (analyzeIf(-1 == header.getContentLength()))
+                                break;
+
+                            if (analyzeIf(buffer.position() >= header.getContentLength())) {
+                                readState = ReadState.CONTENT;
+                                break;
+                            }
+
+                            buffer.limit(buffer.capacity());
+                        }
+                    }
+
+                    break;
+                case CONTENT:
+                    analyzeIf(buffer.position() >= header.getContentLength());
+                    header = null;
+                    break;
+            }
+        }
+
+        private boolean analyzeIf(boolean b) throws IOException {
+            if (b) {
+                analyzeAnswer();
+                clearBuffer();
+            }
+
+            return b;
         }
 
         void doWrite() throws IOException {
@@ -79,23 +139,19 @@ public class JarRetServer {
                         state = State.RESPONSE;
                         break;
                     case END:
-                        buffer.clear();
-                        System.out.println("END");
                         state = State.CONNECTION;
                         break;
                     default:
                         throw new IllegalStateException("Impossible state in write mode: " + state.toString());
                 }
 
+                readState = ReadState.HEADER;
                 key.interestOps(SelectionKey.OP_READ);
             }
         }
 
         private void analyzeAnswer() throws IOException {
 //            printBuffer(buffer);
-
-            HTTPReader reader = HTTPReader.useStringReader(buffer);
-            HTTPHeader header = reader.readHeader();
 
             switch (state) {
                 case CONNECTION:
@@ -154,6 +210,7 @@ public class JarRetServer {
                             buffer.put(CHARSET_ASCII.encode(badRequest()));
                         } else {
                             // TODO : A demander : est-ce qu'une erreur dans une task fait que la task est exécutée ?
+                            jobMonitor.updateATask(Integer.parseInt((String) map.get("Task")), error.toString());
                             buffer.put(CHARSET_ASCII.encode(ok()));
                         }
                     } else {
@@ -223,7 +280,7 @@ public class JarRetServer {
         static Configuration fromFile(Path path) throws IOException {
             ObjectMapper mapper = new ObjectMapper();
 
-            try (InputStream in = Files.newInputStream(path, StandardOpenOption.READ)){
+            try (InputStream in = Files.newInputStream(path, StandardOpenOption.READ)) {
                 Map<String, Object> map = mapper.readValue(in, HashMap.class);
 
                 int port = (map.get("port") == null) ? 7777 : Integer.parseInt((String) map.get("port"));
@@ -333,6 +390,7 @@ public class JarRetServer {
                     cntxt.doRead();
                 }
             } catch (IOException e) {
+                e.printStackTrace();
                 silentlyClose(key.channel());
             }
         }
