@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -132,6 +133,7 @@ class JobMonitor implements Closeable {
     private static int jobPrioritySum = 0;
     private final OutputStream out;
     private final BufferedWriter writer;
+    private static DecimalFormat df = new DecimalFormat("##.##");
 
     JobMonitor(Job job, String answerPath) throws IOException {
         this.job = job;
@@ -140,6 +142,10 @@ class JobMonitor implements Closeable {
         bitSet = new BitSet(Integer.parseInt(job.getJobTaskNumber()));
         out = Files.newOutputStream(path, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
         writer = new BufferedWriter(new OutputStreamWriter(out));
+    }
+
+    String state() {
+        return "Job #" + job.getJobId() + " completion : " + df.format((float) bitSet.cardinality() / Float.parseFloat(job.getJobTaskNumber()) * 100) + "%";
     }
 
     int getJobPriority() {

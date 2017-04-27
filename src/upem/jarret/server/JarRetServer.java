@@ -137,9 +137,11 @@ public class JarRetServer {
                 buffer.clear();
                 switch (state) {
                     case TASK:
+//                        System.out.println("Giving work for chinese people");
                         state = State.RESPONSE;
                         break;
                     case END:
+//                        System.out.println("The chinese person finished his job quickly");
                         state = State.CONNECTION;
                         break;
                     default:
@@ -184,7 +186,11 @@ public class JarRetServer {
                     break;
                 case RESPONSE:
                     ObjectMapper mapper = new ObjectMapper();
+
+//                    System.out.println("Reading bytes");
                     ByteBuffer tmp = reader.readBytes(header.getContentLength());
+//                    System.out.println("Read bytes done");
+
                     buffer.clear();
                     tmp.flip();
                     buffer.put(tmp);
@@ -202,7 +208,12 @@ public class JarRetServer {
                     HashMap<String, Object> map = mapper.readValue(bodyJson, HashMap.class);
 
                     buffer.clear();
+
+//                    System.out.println("Object mapped");
                     Object answer = map.get("Answer");
+
+//                    System.out.println("Answer = " + answer);
+//                    System.out.println("Error = " + map.get("Error"));
 
                     if (answer == null) {
                         Object error = map.get("Error");
@@ -212,11 +223,12 @@ public class JarRetServer {
                         } else {
                             // TODO : A demander : est-ce qu'une erreur dans une task fait que la task est exécutée ?
                             jobMonitor.updateATask(Integer.parseInt((String) map.get("Task")), error.toString());
-                            buffer.put(CHARSET_ASCII.encode(ok()));
+                            buffer.put(CHARSET_ASCII.encode(ok() + "\r\n"));
                         }
                     } else {
+//                        System.out.println("Task done, sending back OK");
                         jobMonitor.updateATask(Integer.parseInt((String) map.get("Task")), answer.toString());
-                        buffer.put(CHARSET_ASCII.encode(ok()));
+                        buffer.put(CHARSET_ASCII.encode(ok() + "\r\n"));
                     }
                     state = State.END;
                     break;
@@ -232,7 +244,7 @@ public class JarRetServer {
         }
 
         private String badRequest() {
-            return "HTTP/1.1 400 Bad Request\r\n";
+            return "HTTP/1.1 400 Bad Request\r\n\r\n";
         }
 
         private String ok() {
@@ -285,8 +297,8 @@ public class JarRetServer {
                 Map<String, Object> map = mapper.readValue(in, HashMap.class);
 
                 int port = (map.get("port") == null) ? 7777 : Integer.parseInt((String) map.get("port"));
-                String logPath = (map.get("logPath") == null) ? "log" : (String) map.get("logPath");
-                String answerPath = (map.get("answerPath") == null) ? "answer" : (String) map.get("answerPath");
+                String logPath = (map.get("logPath") == null) ? "log/" : (String) map.get("logPath");
+                String answerPath = (map.get("answerPath") == null) ? "answer/" : (String) map.get("answerPath");
                 int maxSize = (map.get("maxSize") == null) ? Integer.MAX_VALUE : Integer.parseInt((String) map.get("maxSize"));
                 int comeback = (map.get("comeback") == null) ? 300 : Integer.parseInt((String) map.get("comeback"));
 
@@ -327,7 +339,7 @@ public class JarRetServer {
             closeAllMonitors();
             Thread.currentThread().interrupt();
         });
-        commandMap.put(Command.INFO, this::printKeys);
+        commandMap.put(Command.INFO, this::printInfo);
         commandMap.put(Command.FLUSH, () -> selector.keys().stream()
 				.filter(s -> !(s.channel() instanceof ServerSocketChannel)).forEach(k -> silentlyClose(k.channel())));
     }
@@ -441,6 +453,16 @@ public class JarRetServer {
 //        JarRetServer server = new JarRetServer(7777, Paths.get("resources/JarRetJobs.json"));
         server.launch();
         server.closeAllMonitors();
+    }
+
+    public void printInfo() {
+        System.out.println("State of the keys :");
+        printKeys();
+
+        System.out.println("\nJobs state :");
+        jobList.forEach(j -> System.out.println(j.state()));
+
+        System.out.println("\nNumber of clients logged : " + (selector.keys().size() - 1));
     }
 
     private String interestOpsToString(SelectionKey key) {
