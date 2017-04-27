@@ -16,6 +16,8 @@ import java.sql.Time;
 import java.util.HashMap;
 import java.util.Iterator;
 
+import javax.crypto.SealedObject;
+
 import org.codehaus.jackson.JsonNode;
 import org.codehaus.jackson.JsonProcessingException;
 import org.codehaus.jackson.map.ObjectMapper;
@@ -53,7 +55,7 @@ public class JarRetClient {
 		sc.read(bu);
 
 		bu.flip();
-		System.out.println("Server answer to client's POST request: \n" + ASCII.decode(bu).toString());
+		System.out.println("Server's final answer: \n" + ASCII.decode(bu).toString());
 	}
 
 	/**
@@ -75,6 +77,7 @@ public class JarRetClient {
 		String computeAnswer = "";
 		String finalLine = "";
 		try {
+			System.out.println("Starting computation");
 			computeAnswer = worker.compute(taskNumber);
 		} catch (Exception e) {
 			finalLine = "\"Error\" : \"Computation error\"}";
@@ -221,7 +224,7 @@ public class JarRetClient {
 	 * @return an instance that implements the Worker interface.
 	 */
 	private Worker returnAWorker(Long jobId, String workerVersion, ServerAnswer serverAnswer) {
-
+		System.out.println("Retrieving a worker instance");
 		return workers.computeIfAbsent(jobId, __ -> new HashMap<String, Worker>()).computeIfAbsent(workerVersion,
 				__ -> {
 					try {
@@ -256,7 +259,7 @@ public class JarRetClient {
 				while (!Thread.interrupted()) {
 
 					String GETRequest = createGetRequest(sc.getRemoteAddress());
-
+					System.out.println("=====================\nAsking for a new task");
 					sc.write(ASCII.encode(GETRequest));
 
 					HTTPReader reader = HTTPReader.useBlockingReader(sc, ByteBuffer.allocate(50));
@@ -272,6 +275,9 @@ public class JarRetClient {
 					ServerAnswer serverAnswer = new ServerAnswer(
 							mapper.readValue(getHeader.getCharset().decode(contentJson).toString(), HashMap.class));
 					serverAnswer.putClientId(clientId);
+					
+					System.out.println("received task " + serverAnswer.getTaskNumber() + " from Job " + serverAnswer.getJobId()
+					+ " ( "+ serverAnswer.getWorkerURL() + " , " + serverAnswer.getWorkerClassName() + " , " + serverAnswer.getWorkerVersion() +")");
 
 					/* Gestion de l'attente */
 					int waitSeconds = 0;
@@ -291,9 +297,9 @@ public class JarRetClient {
 					ByteBuffer buffToSend = createBufferToSend(host, serverAnswer, contentWithoutLastLine,
 							contentToSend);
 					buffToSend.flip();
+					System.out.println("Writing answer to server");
 					sc.write(buffToSend);
 
-					System.out.println("The worker " + serverAnswer.getWorkerClassName() + " finished its task.");
 					readServerAnswerAfterPost(sc);
 				}
 			} catch (IOException e) {
