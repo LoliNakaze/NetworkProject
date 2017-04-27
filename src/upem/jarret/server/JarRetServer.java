@@ -5,9 +5,7 @@ import upem.jarret.http.HTTPException;
 import upem.jarret.http.HTTPHeader;
 import upem.jarret.http.HTTPReader;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.UncheckedIOException;
+import java.io.*;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
@@ -16,8 +14,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.text.DateFormat;
 import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.stream.Collectors;
 
 /**
  * Created by nakaze on 15/04/17.
@@ -224,11 +224,13 @@ public class JarRetServer {
                             // TODO : A demander : est-ce qu'une erreur dans une task fait que la task est exécutée ?
                             jobMonitor.updateATask(Integer.parseInt((String) map.get("Task")), error.toString());
                             buffer.put(CHARSET_ASCII.encode(ok() + "\r\n"));
+                            logger.writeMessage("Job #" + jobId + " Task #" + taskId + " by " + map.get("ClientID").toString() + ": Error");
                         }
                     } else {
 //                        System.out.println("Task done, sending back OK");
                         jobMonitor.updateATask(Integer.parseInt((String) map.get("Task")), answer.toString());
                         buffer.put(CHARSET_ASCII.encode(ok() + "\r\n"));
+                        logger.writeMessage("Job #" + jobId + " Task #" + taskId + " by " + map.get("ClientId").toString() + ": Success");
                     }
                     state = State.END;
                     break;
@@ -272,6 +274,30 @@ public class JarRetServer {
             }
 
             throw new IllegalStateException("Impossible state normally");
+        }
+    }
+
+    static class Logger {
+        private final OutputStream out;
+        private final BufferedWriter writer;
+
+        Logger(Path path) throws IOException {
+            path.toFile().mkdirs();
+            out = Files.newOutputStream(path, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
+            writer = new BufferedWriter(new OutputStreamWriter(out));
+        }
+
+        void writeMessage(String message) throws IOException {
+            out.write((DateFormat.getInstance().format(new Date(System.currentTimeMillis())) + ": " + message + "\n").getBytes());
+        }
+
+        void close() {
+            try {
+                out.close();
+                writer.close();
+            } catch (IOException ignored) {
+                // Do nothing
+            }
         }
     }
 
@@ -320,7 +346,7 @@ public class JarRetServer {
     private static final Random rand = new Random();
     private final Thread listener = new Thread(() -> startCommandListener(System.in));
     private static Configuration configuration;
-
+    private static Logger logger;
     private final ArrayBlockingQueue<Command> commandQueue = new ArrayBlockingQueue<>(5);
     private Map<Command, Runnable> commandMap = new EnumMap<>(Command.class);
 
@@ -331,17 +357,26 @@ public class JarRetServer {
         selector = Selector.open();
         selectedKeys = selector.selectedKeys();
 
+        logger = new Logger(Paths.get(configuration.logPath + new Date(System.currentTimeMillis()).toString().replace(' ', '_') + ".txt"));
+
         jobList = JobMonitor.jobMonitorListFromFile(jobPath, configuration.answerPath);
 
         commandMap.put(Command.SHUTDOWN, () -> silentlyClose(serverSocketChannel));
         commandMap.put(Command.SHUTDOWN_NOW, () -> {
             listener.interrupt();
             closeAllMonitors();
+            logger.close();
             Thread.currentThread().interrupt();
         });
-        commandMap.put(Command.INFO, this::printInfo);
+        commandMap.put(Command.INFO, () -> {
+            try {
+                printInfo();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        });
         commandMap.put(Command.FLUSH, () -> selector.keys().stream()
-				.filter(s -> !(s.channel() instanceof ServerSocketChannel)).forEach(k -> silentlyClose(k.channel())));
+                .filter(s -> !(s.channel() instanceof ServerSocketChannel)).forEach(k -> silentlyClose(k.channel())));
     }
 
     /**
@@ -351,6 +386,8 @@ public class JarRetServer {
      */
     public void launch() throws IOException {
         listener.start();
+
+        logger.writeMessage("Server: Launched");
 
         serverSocketChannel.configureBlocking(false);
         serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
@@ -364,10 +401,13 @@ public class JarRetServer {
             processSelectedKeys();
             selectedKeys.clear();
         }
+
+        logger.close();
+        logger.writeMessage("Server: Closed");
     }
 
     private void startCommandListener(InputStream in) {
-         try(Scanner scanner = new Scanner(in)) {
+        try (Scanner scanner = new Scanner(in)) {
             while (!Thread.interrupted() && scanner.hasNextLine()) {
                 String line = scanner.nextLine();
 
@@ -383,9 +423,12 @@ public class JarRetServer {
                         System.err.println("Unknown command.");
                         break;
                 }
+
+                logger.writeMessage("Command: " + line);
             }
-        } catch (InterruptedException e) {
-        	return;
+        } catch (InterruptedException ignored) {
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
     }
 
@@ -413,6 +456,7 @@ public class JarRetServer {
         sc.configureBlocking(false);
         SelectionKey clientKey = sc.register(selector, SelectionKey.OP_READ);
         clientKey.attach(new Context(clientKey));
+        logger.writeMessage("Client logged : " + remoteAddressToString(sc));
     }
 
     private void closeAllMonitors() {
@@ -455,14 +499,15 @@ public class JarRetServer {
         server.closeAllMonitors();
     }
 
-    public void printInfo() {
-        System.out.println("State of the keys :");
-        printKeys();
+    public void printInfo() throws IOException {
+        StringBuilder sb = new StringBuilder();
 
-        System.out.println("\nJobs state :");
-        jobList.forEach(j -> System.out.println(j.state()));
+        sb.append("\nJobs state :");
+        sb.append(jobList.stream().map(JobMonitor::state).collect(Collectors.joining("\n")));
 
-        System.out.println("\nNumber of clients logged : " + (selector.keys().size() - 1));
+        sb.append("\nNumber of clients logged : ").append(selector.keys().stream().filter(SelectionKey::isValid).count() - 1);
+        System.out.println(sb);
+        logger.writeMessage(sb.toString());
     }
 
     private String interestOpsToString(SelectionKey key) {
