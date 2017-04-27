@@ -183,7 +183,7 @@ class JobMonitor implements Closeable {
             return;
 
         bitSet.set(task);
-        out.write((task + ":" + response + "\n").getBytes());
+        out.write((task + ":" + response + "\r\n").getBytes());
     }
 
     @Override

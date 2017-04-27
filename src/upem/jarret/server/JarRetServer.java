@@ -24,7 +24,7 @@ import java.util.concurrent.ArrayBlockingQueue;
  */
 public class JarRetServer {
     private enum Command {
-        SHUTDOWN, STOP, FLUSH, SHOW
+        SHUTDOWN_NOW, SHUTDOWN, INFO
     }
 
     private static final Charset CHARSET_ASCII = Charset.forName("ASCII");
@@ -196,9 +196,9 @@ public class JarRetServer {
                     if (charset == null)
                         charset = Charset.forName("UTF-8");
 
-                    String string = charset.decode(buffer).toString();
+                    String bodyJson = charset.decode(buffer).toString();
 
-                    HashMap<String, Object> map = mapper.readValue(string, HashMap.class);
+                    HashMap<String, Object> map = mapper.readValue(bodyJson, HashMap.class);
 
                     buffer.clear();
                     Object answer = map.get("Answer");
@@ -320,14 +320,13 @@ public class JarRetServer {
 
         jobList = JobMonitor.jobMonitorListFromFile(jobPath, configuration.answerPath);
 
-        commandMap.put(Command.STOP, () -> silentlyClose(serverSocketChannel));
-        commandMap.put(Command.FLUSH, () -> selector.keys().stream().filter(s -> !(s.channel() instanceof ServerSocketChannel)).forEach(k -> silentlyClose(k.channel())));
-        commandMap.put(Command.SHUTDOWN, () -> {
+        commandMap.put(Command.SHUTDOWN, () -> silentlyClose(serverSocketChannel));
+        commandMap.put(Command.SHUTDOWN_NOW, () -> {
             listener.interrupt();
             closeAllMonitors();
             Thread.currentThread().interrupt();
         });
-        commandMap.put(Command.SHOW, this::printKeys);
+        commandMap.put(Command.INFO, this::printKeys);
     }
 
     /**
@@ -353,17 +352,14 @@ public class JarRetServer {
     }
 
     private void startCommandListener(InputStream in) {
-        Scanner scanner = new Scanner(in);
-
-        try {
+         try(Scanner scanner = new Scanner(in)) {
             while (!Thread.interrupted() && scanner.hasNextLine()) {
                 String line = scanner.nextLine();
 
                 switch (line) {
+                    case "SHUTDOWN_NOW":
+                    case "INFO":
                     case "SHUTDOWN":
-                    case "SHOW":
-                    case "STOP":
-                    case "FLUSH":
                         commandQueue.put(Command.valueOf(line));
                         selector.wakeup();
                         break;
@@ -373,6 +369,7 @@ public class JarRetServer {
                 }
             }
         } catch (InterruptedException e) {
+        	return;
         }
     }
 
@@ -421,12 +418,11 @@ public class JarRetServer {
             throw new IOException();
         } catch (IOException e) {
             // Do nothing
-            e.printStackTrace();
         }
     }
 
     private static void usage() {
-        System.out.println("ServerSumNew <joblistPath> [configPath]");
+        System.out.println("JarRetServer <joblistPath> [configPath]");
     }
 
     public static void main(String[] args) throws NumberFormatException, IOException {
