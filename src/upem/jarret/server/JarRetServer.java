@@ -391,7 +391,6 @@ public class JarRetServer {
                     cntxt.doRead();
                 }
             } catch (IOException e) {
-                e.printStackTrace();
                 silentlyClose(key.channel());
             }
         }
