@@ -282,7 +282,7 @@ public class JarRetServer {
         private final BufferedWriter writer;
 
         Logger(Path path) throws IOException {
-            path.toFile().mkdirs();
+            path.toFile().getParentFile().mkdirs();
             out = Files.newOutputStream(path, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
             writer = new BufferedWriter(new OutputStreamWriter(out));
         }
@@ -402,8 +402,8 @@ public class JarRetServer {
             selectedKeys.clear();
         }
 
-        logger.close();
         logger.writeMessage("Server: Closed");
+        logger.close();
     }
 
     private void startCommandListener(InputStream in) {
@@ -427,6 +427,7 @@ public class JarRetServer {
                 logger.writeMessage("Command: " + line);
             }
         } catch (InterruptedException ignored) {
+        } catch (ClosedByInterruptException e) {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -495,7 +496,11 @@ public class JarRetServer {
 
         System.out.println("Server listening on port " + server.configuration.port);
 //        JarRetServer server = new JarRetServer(7777, Paths.get("resources/JarRetJobs.json"));
-        server.launch();
+        try {
+            server.launch();
+        } catch (ClosedChannelException e) {
+        }
+
         server.closeAllMonitors();
     }
 
