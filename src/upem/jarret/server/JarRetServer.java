@@ -50,6 +50,7 @@ public class JarRetServer {
         private byte[] last = new byte[4];
         private HTTPHeader header;
         private HTTPReader reader;
+        private volatile long lastActive;
 
         public Context(SelectionKey key) {
             this.key = key;
@@ -57,6 +58,7 @@ public class JarRetServer {
             state = State.CONNECTION;
             readState = ReadState.HEADER;
             reader = HTTPReader.useStringReader(buffer);
+            lastActive = System.currentTimeMillis();
         }
 
         private void bufferShift() {
@@ -81,6 +83,8 @@ public class JarRetServer {
 
             if ((read = sc.read(buffer)) == -1 || read == 0)
                 return;
+
+            lastActive = System.currentTimeMillis();
 
 //            System.out.println(state + " " + readState);
             switch (readState) {
@@ -130,6 +134,8 @@ public class JarRetServer {
                 buffer.compact();
                 return;
             }
+
+            lastActive = System.currentTimeMillis();
 
             buffer.compact();
 
@@ -275,6 +281,10 @@ public class JarRetServer {
 
             throw new IllegalStateException("Impossible state normally");
         }
+
+        private boolean timeout() {
+            return System.currentTimeMillis() - lastActive > TIMEOUT;
+        }
     }
 
     static class Logger {
@@ -335,8 +345,10 @@ public class JarRetServer {
         static Configuration defaultConfiguration() {
             return new Configuration(7777, "log/", "answer/", Integer.MAX_VALUE, 300);
         }
+
     }
 
+    private static final long TIMEOUT = 5000;
     private static final int BUF_SIZE = 4096;
     private final ServerSocketChannel serverSocketChannel;
     private final Selector selector;
@@ -365,7 +377,6 @@ public class JarRetServer {
         commandMap.put(Command.SHUTDOWN_NOW, () -> {
             listener.interrupt();
             closeAllMonitors();
-            logger.close();
             Thread.currentThread().interrupt();
         });
         commandMap.put(Command.INFO, () -> {
@@ -376,7 +387,7 @@ public class JarRetServer {
             }
         });
         commandMap.put(Command.FLUSH, () -> selector.keys().stream()
-                .filter(s -> !(s.channel() instanceof ServerSocketChannel)).forEach(k -> silentlyClose(k.channel())));
+                .filter(s -> !(s.channel() instanceof ServerSocketChannel)).forEach(k -> loggedClose(k.channel())));
     }
 
     /**
@@ -392,18 +403,31 @@ public class JarRetServer {
         serverSocketChannel.configureBlocking(false);
         serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
         Set<SelectionKey> selectedKeys = selector.selectedKeys();
-        while (!Thread.interrupted()) {
-            selector.select();
+        try {
+            while (!Thread.interrupted()) {
+                selector.select(TIMEOUT / 10);
+                checker();
 
-            Command command = commandQueue.poll();
-            if (command != null) commandMap.get(command).run();
+                Command command = commandQueue.poll();
+                if (command != null) commandMap.get(command).run();
 
-            processSelectedKeys();
-            selectedKeys.clear();
+                processSelectedKeys();
+                selectedKeys.clear();
+            }
+        } finally {
+            try {
+                listener.interrupt();
+                listener.join();
+                System.out.println("Server: Closed");
+                logger.writeMessage("Server: Closed");
+            } catch (InterruptedException e) {
+            }
+            logger.close();
         }
+    }
 
-        logger.writeMessage("Server: Closed");
-        logger.close();
+    private void checker() {
+        selector.keys().stream().filter(k -> !(k.channel() instanceof ServerSocketChannel) && ((Context) k.attachment()).timeout()).map(SelectionKey::channel).forEach(this::loggedClose);
     }
 
     private void startCommandListener(InputStream in) {
@@ -447,7 +471,7 @@ public class JarRetServer {
                     cntxt.doRead();
                 }
             } catch (IOException e) {
-                silentlyClose(key.channel());
+                loggedClose(key.channel());
             }
         }
     }
@@ -468,6 +492,16 @@ public class JarRetServer {
                 throw new UncheckedIOException(e);
             }
         });
+    }
+
+    private void loggedClose(SelectableChannel sc) {
+        try {
+            if (sc instanceof SocketChannel)
+                logger.writeMessage("Client closed: " + ((SocketChannel) sc).getRemoteAddress());
+            silentlyClose(sc);
+        } catch (IOException e) {
+            // Do nothing
+        }
     }
 
     private static void silentlyClose(SelectableChannel sc) {
